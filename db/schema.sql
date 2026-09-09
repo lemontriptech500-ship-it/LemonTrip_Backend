@@ -1,0 +1,21 @@
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
+CREATE TABLE IF NOT EXISTS users (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name VARCHAR(120) NOT NULL,
+  email VARCHAR(255) UNIQUE NOT NULL,
+  phone VARCHAR(30),
+  password_hash TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS flights (
+  id VARCHAR(80) PRIMARY KEY,
+  origin VARCHAR(10) NOT NULL,
+  destination VARCHAR(10) NOT NULL,
+  departure_date DATE NOT NULL,
+  departure_time TIMESTAMPTZ NOT NULL,
+  arrival_time TIMESTAMPTZ NOT NULL,
+  price NUMERIC(12, 2) NOT NULL,
+  currency CHAR(3) NOT NULL DEFAULT 'INR'
+);
