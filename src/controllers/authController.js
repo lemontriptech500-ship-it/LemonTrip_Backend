@@ -1,7 +1,19 @@
 import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
 import { env } from '../config/env.js'
+<<<<<<< HEAD
 import { createUser, findUserByEmail } from '../db/queries.js'
+=======
+import {
+  createGoogleUser,
+  createUser,
+  findUserByEmail,
+  findUserByGoogleId,
+  findUserById,
+  linkGoogleAccount,
+} from '../db/queries.js'
+import { googleAuthService } from '../services/googleAuthService.js'
+>>>>>>> dev
 
 function createToken(user) {
   return jwt.sign({ id: user.id, email: user.email }, env.jwtSecret, { expiresIn: '7d' })
@@ -35,14 +47,84 @@ export async function login(request, response, next) {
     }
 
     const user = await findUserByEmail(email)
+<<<<<<< HEAD
     const validPassword = user && await bcrypt.compare(password, user.password_hash)
+=======
+
+    if (user && !user.password_hash) {
+      return response
+        .status(401)
+        .json({ success: false, error: { message: 'This account uses Google Sign-In. Please continue with Google.' } })
+    }
+
+    const validPassword = user && (await bcrypt.compare(password, user.password_hash))
+>>>>>>> dev
     if (!validPassword) {
       return response.status(401).json({ success: false, error: { message: 'Invalid email or password' } })
     }
 
+<<<<<<< HEAD
     const { password_hash: _passwordHash, ...safeUser } = user
+=======
+    const { password_hash: _passwordHash, google_id: _googleId, ...safeUser } = user
+>>>>>>> dev
     return response.json({ success: true, data: { user: safeUser, token: createToken(safeUser) } })
   } catch (error) {
     return next(error)
   }
 }
+<<<<<<< HEAD
+=======
+
+export async function googleAuth(request, response, next) {
+  try {
+    const { idToken } = request.body
+    if (!idToken) {
+      return response.status(400).json({ success: false, error: { message: 'idToken is required' } })
+    }
+
+    const profile = await googleAuthService.verifyIdToken(idToken)
+
+    // 1. Already signed up with Google before -> log straight in
+    let user = await findUserByGoogleId(profile.googleId)
+
+    if (!user) {
+      // 2. An account with this email already exists (registered with a
+      //    password) -> link Google to it instead of creating a duplicate
+      const existingByEmail = await findUserByEmail(profile.email)
+      if (existingByEmail) {
+        user = await linkGoogleAccount({
+          userId: existingByEmail.id,
+          googleId: profile.googleId,
+          avatar: profile.avatar,
+        })
+      } else {
+        // 3. Brand new user signing up via Google
+        user = await createGoogleUser({
+          name: profile.name,
+          email: profile.email,
+          googleId: profile.googleId,
+          avatar: profile.avatar,
+        })
+      }
+    }
+
+    const { password_hash: _passwordHash, google_id: _googleId, ...safeUser } = user
+    return response.json({ success: true, data: { user: safeUser, token: createToken(safeUser) } })
+  } catch (error) {
+    return next(error)
+  }
+}
+
+export async function me(request, response, next) {
+  try {
+    const user = await findUserById(request.user.id)
+    if (!user) {
+      return response.status(404).json({ success: false, error: { message: 'User not found' } })
+    }
+    return response.json({ success: true, data: { user } })
+  } catch (error) {
+    return next(error)
+  }
+}
+>>>>>>> dev

@@ -7,7 +7,14 @@ export const pool = new Pool({
   connectionString: env.databaseUrl || undefined,
   max: 10,
   idleTimeoutMillis: 30000,
+<<<<<<< HEAD
   connectionTimeoutMillis: 5000,
+=======
+  connectionTimeoutMillis: 15000,
+  ssl: env.databaseUrl && env.databaseUrl.includes('localhost')
+    ? false
+    : { rejectUnauthorized: false },
+>>>>>>> dev
 })
 
 export async function connectDatabase() {
@@ -28,4 +35,8 @@ export async function connectDatabase() {
 
 export async function closeDatabase() {
   await pool.end()
+<<<<<<< HEAD
 }
+=======
+}
+>>>>>>> dev
