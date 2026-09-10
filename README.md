@@ -4,23 +4,15 @@ Beginner-friendly Express API for the LemonTrip OTA platform.
 
 ## Setup
 
-<<<<<<< HEAD
-1. Copy `.env.example` to `.env` and update `DATABASE_URL` and `JWT_SECRET`.
-=======
 1. Copy `.env.example` to `.env` and update `DATABASE_URL`, `JWT_SECRET`, and `GOOGLE_CLIENT_ID` (see below).
->>>>>>> dev
 2. Install dependencies:
 
 ```bash
 npm install
 ```
 
-<<<<<<< HEAD
-3. Create the starter database tables using `db/schema.sql`.
-=======
 3. Create the starter database tables using `db/schema.sql` (safe to re-run — it
    `ALTER`s existing tables to add the Google auth columns if they're missing).
->>>>>>> dev
 4. Start the development server:
 
 ```bash
@@ -29,8 +21,6 @@ npm run dev
 
 The API runs at `http://localhost:5000` by default.
 
-<<<<<<< HEAD
-=======
 ## Google Sign-In setup
 
 1. Google Cloud Console → APIs & Services → Credentials → **Create OAuth
@@ -53,25 +43,19 @@ Google gets linked to it instead of creating a duplicate user. If someone
 who signed up with Google tries `/auth/login` with a password, they get a
 clear "use Google Sign-In" message instead of a confusing failure.
 
->>>>>>> dev
 ## Endpoints
 
 - `GET /health`
 - `POST /api/v1/auth/register`
 - `POST /api/v1/auth/login`
-<<<<<<< HEAD
-=======
 - `POST /api/v1/auth/google`
 - `GET /api/v1/auth/me` (Bearer token required)
->>>>>>> dev
 - `GET /api/v1/flights/search`
 - `GET /api/v1/flights/:flightId`
 - `GET /api/v1/visa/services`
 - `POST /api/v1/visa/applications` (Bearer token required)
 
 Responses use the shared shape `{ success, data, error }`.
-<<<<<<< HEAD
-=======
 
 ## Testing
 
@@ -97,4 +81,3 @@ Covered in `tests/`:
 > written to cover each success/error branch — please run
 > `npm install && npm test` locally before merging, and ping me if anything
 > needs fixing.
->>>>>>> dev
