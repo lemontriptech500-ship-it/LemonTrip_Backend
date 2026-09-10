@@ -2,18 +2,12 @@ import { pool } from '../config/db.js'
 
 export async function findUserByEmail(email) {
   const result = await pool.query(
-<<<<<<< HEAD
-    'SELECT id, name, email, phone, password_hash FROM users WHERE email = $1 LIMIT 1',
-=======
     'SELECT id, name, email, phone, password_hash, google_id, avatar, provider FROM users WHERE email = $1 LIMIT 1',
->>>>>>> dev
     [email.toLowerCase()],
   )
   return result.rows[0] || null
 }
 
-<<<<<<< HEAD
-=======
 export async function findUserById(id) {
   const result = await pool.query(
     'SELECT id, name, email, phone, avatar, provider FROM users WHERE id = $1 LIMIT 1',
@@ -30,7 +24,6 @@ export async function findUserByGoogleId(googleId) {
   return result.rows[0] || null
 }
 
->>>>>>> dev
 export async function createUser({ name, email, phone, passwordHash }) {
   const result = await pool.query(
     'INSERT INTO users (name, email, phone, password_hash) VALUES ($1, $2, $3, $4) RETURNING id, name, email, phone',
@@ -38,9 +31,6 @@ export async function createUser({ name, email, phone, passwordHash }) {
   )
   return result.rows[0]
 }
-<<<<<<< HEAD
-=======
-
 export async function createGoogleUser({ name, email, googleId, avatar }) {
   const result = await pool.query(
     `INSERT INTO users (name, email, google_id, avatar, provider)
@@ -61,4 +51,3 @@ export async function linkGoogleAccount({ userId, googleId, avatar }) {
   )
   return result.rows[0]
 }
->>>>>>> dev

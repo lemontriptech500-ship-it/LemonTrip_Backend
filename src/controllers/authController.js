@@ -1,9 +1,6 @@
 import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
 import { env } from '../config/env.js'
-<<<<<<< HEAD
-import { createUser, findUserByEmail } from '../db/queries.js'
-=======
 import {
   createGoogleUser,
   createUser,
@@ -13,7 +10,6 @@ import {
   linkGoogleAccount,
 } from '../db/queries.js'
 import { googleAuthService } from '../services/googleAuthService.js'
->>>>>>> dev
 
 function createToken(user) {
   return jwt.sign({ id: user.id, email: user.email }, env.jwtSecret, { expiresIn: '7d' })
@@ -47,10 +43,6 @@ export async function login(request, response, next) {
     }
 
     const user = await findUserByEmail(email)
-<<<<<<< HEAD
-    const validPassword = user && await bcrypt.compare(password, user.password_hash)
-=======
-
     if (user && !user.password_hash) {
       return response
         .status(401)
@@ -58,23 +50,16 @@ export async function login(request, response, next) {
     }
 
     const validPassword = user && (await bcrypt.compare(password, user.password_hash))
->>>>>>> dev
     if (!validPassword) {
       return response.status(401).json({ success: false, error: { message: 'Invalid email or password' } })
     }
 
-<<<<<<< HEAD
-    const { password_hash: _passwordHash, ...safeUser } = user
-=======
     const { password_hash: _passwordHash, google_id: _googleId, ...safeUser } = user
->>>>>>> dev
     return response.json({ success: true, data: { user: safeUser, token: createToken(safeUser) } })
   } catch (error) {
     return next(error)
   }
 }
-<<<<<<< HEAD
-=======
 
 export async function googleAuth(request, response, next) {
   try {
@@ -127,4 +112,3 @@ export async function me(request, response, next) {
     return next(error)
   }
 }
->>>>>>> dev
