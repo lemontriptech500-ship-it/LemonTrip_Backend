@@ -1,6 +1,7 @@
 import 'dotenv/config'
 
 const requiredInProduction = ['DATABASE_URL', 'JWT_SECRET']
+const configuredGoogleClientId = process.env.GOOGLE_CLIENT_ID || ''
 
 if (process.env.NODE_ENV === 'production') {
   const missing = requiredInProduction.filter((key) => !process.env[key])
@@ -14,7 +15,7 @@ export const env = {
   port: Number(process.env.PORT || 5000),
   databaseUrl: process.env.DATABASE_URL || '',
   jwtSecret: process.env.JWT_SECRET || 'development-only-secret',
-  googleClientId: process.env.GOOGLE_CLIENT_ID || '',
+  googleClientId: configuredGoogleClientId.startsWith('replace-with-') ? '' : configuredGoogleClientId,
   frontendUrls: [
     process.env.FRONTEND_URL || 'http://localhost:3000',
     process.env.VERCEL_FRONTEND_URL || 'https://lemon-trip-frontend-2563.vercel.app',

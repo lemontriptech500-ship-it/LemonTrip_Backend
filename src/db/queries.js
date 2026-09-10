@@ -3,7 +3,7 @@ import { pool } from '../config/db.js'
 export async function findUserByEmail(email) {
   const result = await pool.query(
     'SELECT id, name, email, phone, password_hash, google_id, avatar, provider FROM users WHERE email = $1 LIMIT 1',
-    [email.toLowerCase()],
+    [email.trim().toLowerCase()],
   )
   return result.rows[0] || null
 }
@@ -27,7 +27,7 @@ export async function findUserByGoogleId(googleId) {
 export async function createUser({ name, email, phone, passwordHash }) {
   const result = await pool.query(
     'INSERT INTO users (name, email, phone, password_hash) VALUES ($1, $2, $3, $4) RETURNING id, name, email, phone',
-    [name, email.toLowerCase(), phone, passwordHash],
+    [name, email.trim().toLowerCase(), phone, passwordHash],
   )
   return result.rows[0]
 }

@@ -18,17 +18,20 @@ function createToken(user) {
 export async function register(request, response, next) {
   try {
     const { name, email, phone = '', password } = request.body
-    if (!name || !email || !password || password.length < 6) {
+    const normalizedName = typeof name === 'string' ? name.trim() : ''
+    const normalizedEmail = typeof email === 'string' ? email.trim().toLowerCase() : ''
+    const normalizedPhone = typeof phone === 'string' ? phone.trim() : ''
+    if (!normalizedName || !normalizedEmail || !password || password.length < 6) {
       return response.status(400).json({ success: false, error: { message: 'Name, email, and a password of at least 6 characters are required' } })
     }
 
-    const existingUser = await findUserByEmail(email)
+    const existingUser = await findUserByEmail(normalizedEmail)
     if (existingUser) {
       return response.status(409).json({ success: false, error: { message: 'Email is already registered' } })
     }
 
     const passwordHash = await bcrypt.hash(password, 12)
-    const user = await createUser({ name, email, phone, passwordHash })
+    const user = await createUser({ name: normalizedName, email: normalizedEmail, phone: normalizedPhone, passwordHash })
     return response.status(201).json({ success: true, data: { user, token: createToken(user) } })
   } catch (error) {
     return next(error)
@@ -38,11 +41,12 @@ export async function register(request, response, next) {
 export async function login(request, response, next) {
   try {
     const { email, password } = request.body
-    if (!email || !password) {
+    const normalizedEmail = typeof email === 'string' ? email.trim().toLowerCase() : ''
+    if (!normalizedEmail || !password) {
       return response.status(400).json({ success: false, error: { message: 'Email and password are required' } })
     }
 
-    const user = await findUserByEmail(email)
+    const user = await findUserByEmail(normalizedEmail)
     if (user && !user.password_hash) {
       return response
         .status(401)
