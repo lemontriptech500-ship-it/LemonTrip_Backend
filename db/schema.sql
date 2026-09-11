@@ -32,6 +32,38 @@ CREATE TABLE IF NOT EXISTS flights (
   currency CHAR(3) NOT NULL DEFAULT 'INR'
 );
 
+CREATE TABLE IF NOT EXISTS flight_bookings (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  booking_reference VARCHAR(32) UNIQUE NOT NULL,
+  user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+  flight_id VARCHAR(80) NOT NULL,
+  fare_id VARCHAR(80) NOT NULL,
+  travellers JSONB NOT NULL DEFAULT '[]'::jsonb,
+  contact JSONB NOT NULL DEFAULT '{}'::jsonb,
+  amount_paise INTEGER NOT NULL CHECK (amount_paise > 0),
+  currency CHAR(3) NOT NULL DEFAULT 'INR',
+  status VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'confirmed', 'failed', 'cancelled')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS flight_payments (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  booking_id UUID NOT NULL REFERENCES flight_bookings(id) ON DELETE CASCADE,
+  provider VARCHAR(30) NOT NULL DEFAULT 'razorpay',
+  provider_order_id VARCHAR(100) UNIQUE NOT NULL,
+  provider_payment_id VARCHAR(100) UNIQUE,
+  signature TEXT,
+  amount_paise INTEGER NOT NULL CHECK (amount_paise > 0),
+  currency CHAR(3) NOT NULL DEFAULT 'INR',
+  status VARCHAR(20) NOT NULL DEFAULT 'created' CHECK (status IN ('created', 'paid', 'failed')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  paid_at TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS idx_flight_bookings_user ON flight_bookings (user_id);
+CREATE INDEX IF NOT EXISTS idx_flight_payments_booking ON flight_payments (booking_id);
+
 CREATE TABLE IF NOT EXISTS blog_posts (
   id VARCHAR(80) PRIMARY KEY,
   category VARCHAR(80) NOT NULL,
