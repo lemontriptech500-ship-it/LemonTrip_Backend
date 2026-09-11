@@ -69,6 +69,10 @@ origins** instead.
 - `GET /api/v1/blog/:postId`
 - `GET /api/v1/packages/search`
 - `GET /api/v1/packages/:packageId`
+- `GET /api/v1/hotels/search`
+- `GET /api/v1/hotels/:hotelId`
+- `GET /api/v1/buses/search`
+- `GET /api/v1/buses/:busId`
 - `GET /api/v1/visa/services`
 - `POST /api/v1/visa/applications` (Bearer token required)
 
