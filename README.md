@@ -69,6 +69,26 @@ origins** instead.
 - `GET /api/v1/blog/:postId`
 - `GET /api/v1/packages/search`
 - `GET /api/v1/packages/:packageId`
+- `GET /api/v1/hotels/search`
+- `GET /api/v1/hotels/:hotelId`
+- `GET /api/v1/buses/search`
+- `GET /api/v1/buses/:busId`
+- `POST /api/v1/payments/razorpay/flights/order`
+- `POST /api/v1/payments/razorpay/flights/verify`
+
+### Razorpay setup
+
+Add Razorpay test or live credentials to the backend `.env` file:
+
+```env
+RAZORPAY_KEY_ID=rzp_test_your_key_id
+RAZORPAY_KEY_SECRET=your_razorpay_secret
+```
+
+The flight payment flow creates the order on the server using the selected fare,
+opens Razorpay Checkout in the frontend, verifies the returned signature on the
+server, and confirms the booking only after verification. Card and UPI details
+are handled by Razorpay Checkout and are not stored by LemonTrip.
 - `GET /api/v1/visa/services`
 - `POST /api/v1/visa/applications` (Bearer token required)
 

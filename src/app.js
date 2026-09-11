@@ -6,6 +6,10 @@ import visaRoutes from './routes/visaRoutes.js'
 import flightRoutes from './routes/flightRoutes.js'
 import blogRoutes from './routes/blogRoutes.js'
 import packageRoutes from './routes/packageRoutes.js'
+import hotelRoutes from './routes/hotelRoutes.js'
+import busRoutes from './routes/busRoutes.js'
+import trainRoutes from './routes/trainRoutes.js'
+import paymentRoutes from './routes/paymentRoutes.js'
 import { notFoundHandler, errorHandler } from './middlewares/errorHandler.js'
 
 const app = express()
@@ -23,6 +27,10 @@ app.use('/api/v1/visa', visaRoutes)
 app.use('/api/v1/flights', flightRoutes)
 app.use('/api/v1/blog', blogRoutes)
 app.use('/api/v1/packages', packageRoutes)
+app.use('/api/v1/hotels', hotelRoutes)
+app.use('/api/v1/buses', busRoutes)
+app.use('/api/v1/trains', trainRoutes)
+app.use('/api/v1/payments', paymentRoutes)
 
 app.use(notFoundHandler)
 app.use(errorHandler)
