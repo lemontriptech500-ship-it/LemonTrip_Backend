@@ -115,6 +115,7 @@ export async function verifyFlightPayment(request, response, next) {
 }
 
 const travelCatalogQueries = {
+  hotel: 'SELECT id, currency, catalog FROM hotels WHERE id = $1 AND active = TRUE LIMIT 1',
   bus: 'SELECT price, currency, seats_left AS "seatsLeft" FROM bus_services WHERE id = $1 AND active = TRUE LIMIT 1',
   train: 'SELECT price_amount AS price, currency FROM train_services WHERE id = $1 AND active = TRUE LIMIT 1',
   package: 'SELECT price_amount AS price, currency FROM travel_packages WHERE id = $1 LIMIT 1',
@@ -137,7 +138,26 @@ export async function createTravelOrder(request, response, next) {
       return response.status(409).json({ success: false, error: { message: 'Not enough seats are available' } })
     }
 
-    const amountPaise = Math.round(Number(item.price) * 100 * normalizedQuantity)
+    let amountPaise
+    if (itemType === 'hotel') {
+      if (!Array.isArray(details.selections) || details.selections.length === 0 || !Number.isInteger(normalizedQuantity)) {
+        return response.status(400).json({ success: false, error: { message: 'Hotel room selections and nights are required' } })
+      }
+
+      const catalogRooms = item.catalog?.rooms || []
+      const roomTotal = details.selections.reduce((total, selection) => {
+        const room = catalogRooms.find((candidate) => candidate.id === selection.roomId)
+        const rate = room?.rates?.find((candidate) => candidate.id === selection.rateId)
+        const roomQuantity = Number(selection.quantity)
+        if (!room || !rate || !Number.isInteger(roomQuantity) || roomQuantity < 1 || roomQuantity > Number(room.availableQuantity || 0)) {
+          return Number.NaN
+        }
+        return total + Number(rate.pricePerNight) * roomQuantity
+      }, 0)
+      amountPaise = Math.round(roomTotal * normalizedQuantity * 100)
+    } else {
+      amountPaise = Math.round(Number(item.price) * 100 * normalizedQuantity)
+    }
     if (!Number.isFinite(amountPaise) || amountPaise <= 0) {
       return response.status(400).json({ success: false, error: { message: 'Travel item price is invalid' } })
     }

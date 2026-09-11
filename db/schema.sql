@@ -189,7 +189,7 @@ CREATE TABLE IF NOT EXISTS travel_bookings (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   booking_reference VARCHAR(32) UNIQUE NOT NULL,
   user_id UUID REFERENCES users(id) ON DELETE SET NULL,
-  item_type VARCHAR(20) NOT NULL CHECK (item_type IN ('bus', 'train', 'package')),
+  item_type VARCHAR(20) NOT NULL CHECK (item_type IN ('hotel', 'bus', 'train', 'package')),
   item_id VARCHAR(80) NOT NULL,
   details JSONB NOT NULL DEFAULT '{}'::jsonb,
   amount_paise INTEGER NOT NULL CHECK (amount_paise > 0),
@@ -198,6 +198,9 @@ CREATE TABLE IF NOT EXISTS travel_bookings (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+ALTER TABLE travel_bookings DROP CONSTRAINT IF EXISTS travel_bookings_item_type_check;
+ALTER TABLE travel_bookings ADD CONSTRAINT travel_bookings_item_type_check CHECK (item_type IN ('hotel', 'bus', 'train', 'package'));
 
 CREATE TABLE IF NOT EXISTS travel_payments (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
