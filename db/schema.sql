@@ -54,3 +54,22 @@ VALUES
   ('blog-5', 'Travel Tips', 'Business Travel: Packing Light for Short Trips', 'Master the art of minimalist packing for business trips. Look sharp with just a carry-on bag.', 'The easiest business trip to manage is the one that fits in a carry-on. Build a small capsule wardrobe around versatile pieces, keep chargers together, and leave space for anything you may bring home.', 'bg-[var(--color-secondary-soft)]', 'https://images.unsplash.com/photo-1553877522-43269d4ea984?w=900&q=85', '2024-03-08', '4 min read'),
   ('blog-6', 'Destinations', 'Best Hill Stations to Visit in India This Summer', 'Escape the heat with these stunning hill stations across India. From Shimla to Munnar, plan your perfect getaway.', 'India''s hill stations offer very different landscapes and rhythms. Compare weather, travel time, and local activities before choosing between a quiet mountain retreat, a tea-growing region, or a lively heritage town.', 'bg-[var(--color-accent-soft)]', 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=900&q=85', '2024-04-22', '6 min read')
 ON CONFLICT (id) DO NOTHING;
+
+CREATE TABLE IF NOT EXISTS travel_packages (
+  id VARCHAR(80) PRIMARY KEY,
+  destination VARCHAR(160) NOT NULL,
+  duration VARCHAR(80) NOT NULL,
+  description TEXT NOT NULL,
+  starting_price VARCHAR(80) NOT NULL,
+  highlights TEXT[] NOT NULL DEFAULT '{}',
+  image_fallback_color VARCHAR(120) NOT NULL,
+  image_url TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+INSERT INTO travel_packages (id, destination, duration, description, starting_price, highlights, image_fallback_color, image_url)
+VALUES
+  ('pkg-1', 'Swiss Alps Explorer', '7 Days, 6 Nights', 'Experience the breathtaking beauty of the Swiss Alps with scenic train rides and cozy stays.', 'From $1,299 (Sample)', ARRAY['Scenic Train Rides', 'Mountain Tours', 'Breakfast Included'], 'bg-[var(--color-secondary-soft)]', 'https://images.unsplash.com/photo-1530789253388-582c481c54b0?w=1200&q=85'),
+  ('pkg-2', 'Tropical Maldives', '5 Days, 4 Nights', 'Relax in overwater villas and enjoy the crystal-clear waters of the Indian Ocean.', 'From $899 (Sample)', ARRAY['Overwater Villa', 'Snorkeling', 'All-Inclusive'], 'bg-[var(--color-accent-soft)]', 'https://images.unsplash.com/photo-1514282401047-d79a71a590e8?w=1200&q=85'),
+  ('pkg-3', 'Cultural Japan', '10 Days, 9 Nights', 'Discover the perfect blend of ancient traditions and modern technology in Japan.', 'From $1,899 (Sample)', ARRAY['Tokyo City Tour', 'Kyoto Temples', 'Bullet Train Pass'], 'bg-[var(--color-primary-soft)]', 'https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e?w=1200&q=85')
+ON CONFLICT (id) DO NOTHING;

@@ -67,7 +67,7 @@ export async function login(request, response, next) {
 
 export async function googleAuth(request, response, next) {
   try {
-    const { idToken } = request.body
+    const { idToken, mode = 'signin' } = request.body
     if (!idToken) {
       return response.status(400).json({ success: false, error: { message: 'idToken is required' } })
     }
@@ -87,13 +87,18 @@ export async function googleAuth(request, response, next) {
           googleId: profile.googleId,
           avatar: profile.avatar,
         })
-      } else {
+      } else if (mode === 'signup') {
         // 3. Brand new user signing up via Google
         user = await createGoogleUser({
           name: profile.name,
           email: profile.email,
           googleId: profile.googleId,
           avatar: profile.avatar,
+        })
+      } else {
+        return response.status(404).json({
+          success: false,
+          error: { message: 'No account found for this Google account. Please create an account first.' },
         })
       }
     }
