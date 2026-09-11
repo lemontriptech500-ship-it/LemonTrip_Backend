@@ -45,6 +45,20 @@ CREATE TABLE IF NOT EXISTS blog_posts (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+ALTER TABLE flights
+  ADD COLUMN IF NOT EXISTS airline           text,
+  ADD COLUMN IF NOT EXISTS airline_code      text,
+  ADD COLUMN IF NOT EXISTS flight_number     text,
+  ADD COLUMN IF NOT EXISTS duration_minutes  integer,
+  ADD COLUMN IF NOT EXISTS stops             integer DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS stop_locations    text[],
+  ADD COLUMN IF NOT EXISTS travel_class      text DEFAULT 'economy',
+  ADD COLUMN IF NOT EXISTS refundable        boolean DEFAULT false,
+  ADD COLUMN IF NOT EXISTS baggage_allowance text,
+  ADD COLUMN IF NOT EXISTS segments          jsonb,
+  ADD COLUMN IF NOT EXISTS fare_options      jsonb;
+  
+
 INSERT INTO blog_posts (id, category, title, excerpt, content, image_fallback_color, image_url, published_at, read_time)
 VALUES
   ('blog-1', 'Travel Tips', '10 Essential Items to Pack for a Beach Vacation', 'Don''t let a forgotten item ruin your sunny getaway. Here is our ultimate packing list for the perfect beach trip.', 'A thoughtful packing list keeps a beach holiday relaxed from the first morning to the last sunset. Pack light layers, sun protection, swimwear, comfortable footwear, a reusable water bottle, and a small dry bag for your essentials.', 'bg-[var(--color-primary-soft)]', 'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?w=900&q=85', '2023-10-12', '5 min read'),
