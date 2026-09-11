@@ -14,7 +14,12 @@ import { notFoundHandler, errorHandler } from './middlewares/errorHandler.js'
 
 const app = express()
 
-app.use(cors({ origin: env.frontendUrls, credentials: true }))
+const isAllowedOrigin = (origin) => {
+  if (!origin || env.frontendUrls.includes(origin)) return true
+  return env.nodeEnv !== 'production' && /^https?:\/\/localhost:\d+$/.test(origin)
+}
+
+app.use(cors({ origin: (origin, callback) => callback(null, isAllowedOrigin(origin)), credentials: true }))
 app.use(express.json({ limit: '2mb' }))
 app.use(express.urlencoded({ extended: true }))
 
