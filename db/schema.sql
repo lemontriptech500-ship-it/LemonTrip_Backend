@@ -140,15 +140,81 @@ CREATE TABLE IF NOT EXISTS travel_packages (
   highlights TEXT[] NOT NULL DEFAULT '{}',
   image_fallback_color VARCHAR(120) NOT NULL,
   image_url TEXT,
+  price_amount NUMERIC(12, 2) NOT NULL DEFAULT 0 CHECK (price_amount > 0),
+  currency CHAR(3) NOT NULL DEFAULT 'INR',
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-INSERT INTO travel_packages (id, destination, duration, description, starting_price, highlights, image_fallback_color, image_url)
+ALTER TABLE travel_packages ADD COLUMN IF NOT EXISTS price_amount NUMERIC(12, 2) NOT NULL DEFAULT 0;
+ALTER TABLE travel_packages ADD COLUMN IF NOT EXISTS currency CHAR(3) NOT NULL DEFAULT 'INR';
+
+INSERT INTO travel_packages (id, destination, duration, description, starting_price, highlights, image_fallback_color, image_url, price_amount, currency)
 VALUES
-  ('pkg-1', 'Swiss Alps Explorer', '7 Days, 6 Nights', 'Experience the breathtaking beauty of the Swiss Alps with scenic train rides and cozy stays.', 'From $1,299 (Sample)', ARRAY['Scenic Train Rides', 'Mountain Tours', 'Breakfast Included'], 'bg-[var(--color-secondary-soft)]', 'https://images.unsplash.com/photo-1530789253388-582c481c54b0?w=1200&q=85'),
-  ('pkg-2', 'Tropical Maldives', '5 Days, 4 Nights', 'Relax in overwater villas and enjoy the crystal-clear waters of the Indian Ocean.', 'From $899 (Sample)', ARRAY['Overwater Villa', 'Snorkeling', 'All-Inclusive'], 'bg-[var(--color-accent-soft)]', 'https://images.unsplash.com/photo-1514282401047-d79a71a590e8?w=1200&q=85'),
-  ('pkg-3', 'Cultural Japan', '10 Days, 9 Nights', 'Discover the perfect blend of ancient traditions and modern technology in Japan.', 'From $1,899 (Sample)', ARRAY['Tokyo City Tour', 'Kyoto Temples', 'Bullet Train Pass'], 'bg-[var(--color-primary-soft)]', 'https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e?w=1200&q=85')
+  ('pkg-1', 'Swiss Alps Explorer', '7 Days, 6 Nights', 'Experience the breathtaking beauty of the Swiss Alps with scenic train rides and cozy stays.', 'From INR 129,900 (Sample)', ARRAY['Scenic Train Rides', 'Mountain Tours', 'Breakfast Included'], 'bg-[var(--color-secondary-soft)]', 'https://images.unsplash.com/photo-1530789253388-582c481c54b0?w=1200&q=85', 129900, 'INR'),
+  ('pkg-2', 'Tropical Maldives', '5 Days, 4 Nights', 'Relax in overwater villas and enjoy the crystal-clear waters of the Indian Ocean.', 'From INR 89,900 (Sample)', ARRAY['Overwater Villa', 'Snorkeling', 'All-Inclusive'], 'bg-[var(--color-accent-soft)]', 'https://images.unsplash.com/photo-1514282401047-d79a71a590e8?w=1200&q=85', 89900, 'INR'),
+  ('pkg-3', 'Cultural Japan', '10 Days, 9 Nights', 'Discover the perfect blend of ancient traditions and modern technology in Japan.', 'From INR 189,900 (Sample)', ARRAY['Tokyo City Tour', 'Kyoto Temples', 'Bullet Train Pass'], 'bg-[var(--color-primary-soft)]', 'https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e?w=1200&q=85', 189900, 'INR')
 ON CONFLICT (id) DO NOTHING;
+
+UPDATE travel_packages SET price_amount = 129900, currency = 'INR' WHERE id = 'pkg-1' AND price_amount = 0;
+UPDATE travel_packages SET price_amount = 89900, currency = 'INR' WHERE id = 'pkg-2' AND price_amount = 0;
+UPDATE travel_packages SET price_amount = 189900, currency = 'INR' WHERE id = 'pkg-3' AND price_amount = 0;
+UPDATE travel_packages SET starting_price = 'From INR 129,900 (Sample)' WHERE id = 'pkg-1' AND starting_price LIKE 'From $%';
+UPDATE travel_packages SET starting_price = 'From INR 89,900 (Sample)' WHERE id = 'pkg-2' AND starting_price LIKE 'From $%';
+UPDATE travel_packages SET starting_price = 'From INR 189,900 (Sample)' WHERE id = 'pkg-3' AND starting_price LIKE 'From $%';
+
+CREATE TABLE IF NOT EXISTS train_services (
+  id VARCHAR(80) PRIMARY KEY,
+  train_number VARCHAR(30) NOT NULL,
+  name VARCHAR(160) NOT NULL,
+  origin VARCHAR(120) NOT NULL,
+  destination VARCHAR(120) NOT NULL,
+  departure_time TIME NOT NULL,
+  arrival_time TIME NOT NULL,
+  duration_label VARCHAR(40) NOT NULL,
+  classes TEXT[] NOT NULL DEFAULT '{}',
+  price_amount NUMERIC(12, 2) NOT NULL CHECK (price_amount > 0),
+  currency CHAR(3) NOT NULL DEFAULT 'INR',
+  active BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+INSERT INTO train_services (id, train_number, name, origin, destination, departure_time, arrival_time, duration_label, classes, price_amount, currency)
+VALUES
+  ('train-1', '12951', 'Mumbai Rajdhani', 'Mumbai', 'Delhi', '17:00', '08:35', '15h 35m', ARRAY['1A', '2A', '3A'], 2450, 'INR'),
+  ('train-2', '12002', 'Bhopal Shatabdi', 'New Delhi', 'Bhopal', '06:00', '14:40', '8h 40m', ARRAY['CC', 'EC'], 1280, 'INR'),
+  ('train-3', '22691', 'Rajdhani Express', 'Bengaluru', 'New Delhi', '20:20', '05:55', '33h 35m', ARRAY['2A', '3A'], 2150, 'INR')
+ON CONFLICT (id) DO NOTHING;
+
+CREATE TABLE IF NOT EXISTS travel_bookings (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  booking_reference VARCHAR(32) UNIQUE NOT NULL,
+  user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+  item_type VARCHAR(20) NOT NULL CHECK (item_type IN ('bus', 'train', 'package')),
+  item_id VARCHAR(80) NOT NULL,
+  details JSONB NOT NULL DEFAULT '{}'::jsonb,
+  amount_paise INTEGER NOT NULL CHECK (amount_paise > 0),
+  currency CHAR(3) NOT NULL DEFAULT 'INR',
+  status VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'confirmed', 'failed', 'cancelled')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS travel_payments (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  booking_id UUID NOT NULL REFERENCES travel_bookings(id) ON DELETE CASCADE,
+  provider VARCHAR(30) NOT NULL DEFAULT 'razorpay',
+  provider_order_id VARCHAR(100) UNIQUE NOT NULL,
+  provider_payment_id VARCHAR(100) UNIQUE,
+  signature TEXT,
+  amount_paise INTEGER NOT NULL CHECK (amount_paise > 0),
+  currency CHAR(3) NOT NULL DEFAULT 'INR',
+  status VARCHAR(20) NOT NULL DEFAULT 'created' CHECK (status IN ('created', 'paid', 'failed')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  paid_at TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS idx_travel_bookings_user ON travel_bookings (user_id);
+CREATE INDEX IF NOT EXISTS idx_travel_payments_booking ON travel_payments (booking_id);
 
 CREATE TABLE IF NOT EXISTS hotels (
   id VARCHAR(80) PRIMARY KEY,
