@@ -13,7 +13,7 @@ const requiredInProduction = ['DATABASE_URL', 'JWT_SECRET', 'RAZORPAY_KEY_ID', '
 const configuredGoogleClientId = getEnv('GOOGLE_CLIENT_ID')
 
 if (getEnv('NODE_ENV') === 'production') {
-  const missing = requiredInProduction.filter((key) => !process.env[key])
+  const missing = requiredInProduction.filter((key) => !getEnv(key))
   if (missing.length > 0) {
     throw new Error(`Missing required environment variables: ${missing.join(', ')}`)
   }
