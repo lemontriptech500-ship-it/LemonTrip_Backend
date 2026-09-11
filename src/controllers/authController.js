@@ -8,6 +8,7 @@ import {
   findUserByGoogleId,
   findUserById,
   linkGoogleAccount,
+  updateUserProfile,
 } from '../db/queries.js'
 import { googleAuthService } from '../services/googleAuthService.js'
 
@@ -116,6 +117,25 @@ export async function me(request, response, next) {
     if (!user) {
       return response.status(404).json({ success: false, error: { message: 'User not found' } })
     }
+    return response.json({ success: true, data: { user } })
+  } catch (error) {
+    return next(error)
+  }
+}
+
+export async function updateProfile(request, response, next) {
+  try {
+    const name = typeof request.body.name === 'string' ? request.body.name.trim() : ''
+    const phone = typeof request.body.phone === 'string' ? request.body.phone.trim() : ''
+    if (!name) {
+      return response.status(400).json({ success: false, error: { message: 'Name is required' } })
+    }
+    if (phone && !/^[+\d][\d\s()-]{6,19}$/.test(phone)) {
+      return response.status(400).json({ success: false, error: { message: 'Enter a valid phone number' } })
+    }
+
+    const user = await updateUserProfile({ id: request.user.id, name, phone })
+    if (!user) return response.status(404).json({ success: false, error: { message: 'User not found' } })
     return response.json({ success: true, data: { user } })
   } catch (error) {
     return next(error)

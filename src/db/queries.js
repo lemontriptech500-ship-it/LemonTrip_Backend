@@ -16,6 +16,15 @@ export async function findUserById(id) {
   return result.rows[0] || null
 }
 
+export async function updateUserProfile({ id, name, phone }) {
+  const result = await pool.query(
+    `UPDATE users SET name = $1, phone = $2 WHERE id = $3
+     RETURNING id, name, email, phone, avatar, provider`,
+    [name, phone, id],
+  )
+  return result.rows[0] || null
+}
+
 export async function findUserByGoogleId(googleId) {
   const result = await pool.query(
     'SELECT id, name, email, phone, google_id, avatar, provider FROM users WHERE google_id = $1 LIMIT 1',
