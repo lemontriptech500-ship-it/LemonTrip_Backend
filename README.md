@@ -28,8 +28,15 @@ The API runs at `http://localhost:5000` by default.
 2. Add your frontend origin (e.g. `http://localhost:3000`) under **Authorized
    JavaScript origins**.
 3. Copy the **Client ID** into `.env` as `GOOGLE_CLIENT_ID`.
-4. On the frontend, use Google Identity Services to get a credential, then
-   `POST` it here:
+4. Copy the same Client ID into the frontend's `.env.local` as
+   `NEXT_PUBLIC_GOOGLE_CLIENT_ID`:
+
+```env
+NEXT_PUBLIC_GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
+```
+
+5. On the frontend, Google Identity Services gets a credential and posts it
+   here:
 
 ```bash
 curl -X POST http://localhost:5000/api/v1/auth/google \
@@ -43,6 +50,12 @@ Google gets linked to it instead of creating a duplicate user. If someone
 who signed up with Google tries `/auth/login` with a password, they get a
 clear "use Google Sign-In" message instead of a confusing failure.
 
+Restart both development servers after changing either environment file.
+The Google button is present but disabled while the client ID is still the
+placeholder value. No redirect URI is required for this Google Identity
+Services button; authorize the frontend URL under **Authorized JavaScript
+origins** instead.
+
 ## Endpoints
 
 - `GET /health`
@@ -52,6 +65,8 @@ clear "use Google Sign-In" message instead of a confusing failure.
 - `GET /api/v1/auth/me` (Bearer token required)
 - `GET /api/v1/flights/search`
 - `GET /api/v1/flights/:flightId`
+- `GET /api/v1/blog`
+- `GET /api/v1/blog/:postId`
 - `GET /api/v1/visa/services`
 - `POST /api/v1/visa/applications` (Bearer token required)
 

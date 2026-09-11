@@ -4,6 +4,7 @@ import { env } from './config/env.js'
 import authRoutes from './routes/authRoutes.js'
 import visaRoutes from './routes/visaRoutes.js'
 import flightRoutes from './routes/flightRoutes.js'
+import blogRoutes from './routes/blogRoutes.js'
 import { notFoundHandler, errorHandler } from './middlewares/errorHandler.js'
 
 const app = express()
@@ -19,6 +20,7 @@ app.get('/health', (_request, response) => {
 app.use('/api/v1/auth', authRoutes)
 app.use('/api/v1/visa', visaRoutes)
 app.use('/api/v1/flights', flightRoutes)
+app.use('/api/v1/blog', blogRoutes)
 
 app.use(notFoundHandler)
 app.use(errorHandler)
