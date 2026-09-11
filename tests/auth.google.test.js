@@ -24,7 +24,7 @@ test('POST /auth/google creates a brand-new user on first Google sign-in', async
     } // createGoogleUser
   })
 
-  const res = await request(app).post(`${API}/google`).send({ idToken: 'valid-google-id-token' })
+  const res = await request(app).post(`${API}/google`).send({ idToken: 'valid-google-id-token', mode: 'signup' })
 
   assert.equal(res.status, 200)
   assert.equal(res.body.success, true)
@@ -71,6 +71,16 @@ test('POST /auth/google links Google to an existing local account with the same 
   assert.equal(res.status, 200)
   assert.equal(res.body.data.user.id, 'user-local')
   assert.equal(linkCalled, true)
+})
+
+test('POST /auth/google rejects an unknown account during Google sign-in', async (t) => {
+  t.mock.method(googleAuthService, 'verifyIdToken', async () => profile)
+  t.mock.method(pool, 'query', async () => ({ rows: [] }))
+
+  const res = await request(app).post(`${API}/google`).send({ idToken: 'valid-google-id-token', mode: 'signin' })
+
+  assert.equal(res.status, 404)
+  assert.match(res.body.error.message, /create an account first/i)
 })
 
 test('POST /auth/google rejects an invalid/expired Google token with 401', async (t) => {
