@@ -187,6 +187,79 @@ export async function verifyTopup(request, response, next) {
   }
 }
 
+export async function debitWallet(request, response, next) {
+  const client = await pool.connect()
+  try {
+    const { amount, bookingReference, description = 'Booking payment' } = request.body
+    const amountPaise = parseAmountPaise(amount)
+    if (!amountPaise || !bookingReference) {
+      return response.status(400).json({ success: false, error: { message: 'Valid amount and booking reference are required' } })
+    }
+
+    await client.query('BEGIN')
+    
+    // Get wallet with row lock
+    const walletResult = await client.query(
+      `SELECT id, balance_paise, currency, status FROM wallets 
+       WHERE user_id = $1 FOR UPDATE`,
+      [request.user.id]
+    )
+    
+    if (!walletResult.rows[0]) {
+      await client.query('ROLLBACK')
+      return response.status(404).json({ success: false, error: { message: 'Wallet not found' } })
+    }
+    
+    const wallet = walletResult.rows[0]
+    if (wallet.status !== 'active') {
+      await client.query('ROLLBACK')
+      return response.status(403).json({ success: false, error: { message: 'Wallet is not active' } })
+    }
+    
+    if (wallet.balance_paise < amountPaise) {
+      await client.query('ROLLBACK')
+      return response.status(402).json({ success: false, error: { message: 'Insufficient wallet balance' } })
+    }
+
+    // Debit wallet
+    const transactionRef = makeReference('WDB')
+    const balanceBefore = wallet.balance_paise
+    const balanceAfter = balanceBefore - amountPaise
+    
+    await client.query(
+      `UPDATE wallets SET balance_paise = $1, updated_at = NOW() 
+       WHERE id = $2`,
+      [balanceAfter, wallet.id]
+    )
+
+    // Create debit transaction
+    await client.query(
+      `INSERT INTO wallet_transactions 
+       (wallet_id, user_id, transaction_reference, type, source, amount_paise, 
+        balance_before_paise, balance_after_paise, status, description, booking_reference, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW(), NOW())`,
+      [wallet.id, request.user.id, transactionRef, 'DEBIT', 'BOOKING', amountPaise, 
+       balanceBefore, balanceAfter, 'SUCCESS', description, bookingReference]
+    )
+
+    await client.query('COMMIT')
+    return response.json({
+      success: true,
+      data: {
+        status: 'SUCCESS',
+        balance: Number(balanceAfter) / 100,
+        currency: wallet.currency,
+        transactionReference: transactionRef
+      }
+    })
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {})
+    return next(error)
+  } finally {
+    client.release()
+  }
+}
+
 export async function getTransactions(request, response, next) {
   try {
     const page = Math.max(1, Number.parseInt(request.query.page, 10) || 1)
