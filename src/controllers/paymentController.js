@@ -2,6 +2,7 @@ import crypto from 'node:crypto'
 import Razorpay from 'razorpay'
 import { env } from '../config/env.js'
 import { pool } from '../config/db.js'
+import { calculateCouponDiscount } from '../services/couponService.js'
 
 function getRazorpay() {
   if (!env.razorpayKeyId || !env.razorpayKeySecret) {
@@ -19,7 +20,7 @@ function makeBookingReference() {
 export async function createFlightOrder(request, response, next) {
   const client = await pool.connect()
   try {
-    const { flightId, fareId, travellers = [], contact = {} } = request.body
+    const { flightId, fareId, travellers = [], contact = {}, couponCode = '' } = request.body
     if (!flightId || !fareId || !Array.isArray(travellers) || travellers.length === 0 || !contact.email) {
       return response.status(400).json({ success: false, error: { message: 'Flight, fare, traveller, and contact details are required' } })
     }
@@ -33,20 +34,22 @@ export async function createFlightOrder(request, response, next) {
       return response.status(400).json({ success: false, error: { message: 'Selected fare is invalid or unavailable' } })
     }
 
-    const amountPaise = Math.round(Number(fare.price) * 100)
+    const subtotalPaise = Math.round(Number(fare.price) * travellers.length * 100)
+    const { discountPaise } = await calculateCouponDiscount(client, couponCode, 'flight', subtotalPaise)
+    const amountPaise = subtotalPaise - discountPaise
     const razorpay = getRazorpay()
     const order = await razorpay.orders.create({
       amount: amountPaise,
       currency: flight.currency || 'INR',
       receipt: makeBookingReference(),
-      notes: { flightId, fareId },
+      notes: { flightId, fareId, couponCode: couponCode || '' },
     })
 
     await client.query('BEGIN')
     const bookingResult = await client.query(
-      `INSERT INTO flight_bookings (booking_reference, user_id, flight_id, fare_id, travellers, contact, amount_paise, currency)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id, booking_reference AS "bookingReference"`,
-      [makeBookingReference(), request.user?.id || null, flightId, fareId, JSON.stringify(travellers), JSON.stringify(contact), amountPaise, flight.currency || 'INR'],
+      `INSERT INTO flight_bookings (booking_reference, user_id, flight_id, fare_id, travellers, contact, amount_paise, coupon_code, discount_paise, currency)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id, booking_reference AS "bookingReference"`,
+      [makeBookingReference(), request.user?.id || null, flightId, fareId, JSON.stringify(travellers), JSON.stringify(contact), amountPaise, couponCode.trim() || null, discountPaise, flight.currency || 'INR'],
     )
     const booking = bookingResult.rows[0]
     await client.query(
@@ -58,7 +61,7 @@ export async function createFlightOrder(request, response, next) {
 
     return response.status(201).json({
       success: true,
-      data: { orderId: order.id, amount: order.amount, currency: order.currency, keyId: env.razorpayKeyId, bookingId: booking.id, bookingReference: booking.bookingReference },
+      data: { orderId: order.id, amount: order.amount, currency: order.currency, keyId: env.razorpayKeyId, bookingId: booking.id, bookingReference: booking.bookingReference, subtotal: subtotalPaise / 100, discount: discountPaise / 100 },
     })
   } catch (error) {
     await client.query('ROLLBACK').catch(() => {})
@@ -124,7 +127,7 @@ const travelCatalogQueries = {
 export async function createTravelOrder(request, response, next) {
   const client = await pool.connect()
   try {
-    const { itemType, itemId, quantity = 1, details = {} } = request.body
+    const { itemType, itemId, quantity = 1, details = {}, couponCode = '' } = request.body
     const normalizedQuantity = Number(quantity)
     const catalogQuery = Object.prototype.hasOwnProperty.call(travelCatalogQueries, itemType) ? travelCatalogQueries[itemType] : null
     if (!catalogQuery || !itemId || !Number.isInteger(normalizedQuantity) || normalizedQuantity < 1 || !details || typeof details !== 'object' || !details.email) {
@@ -162,6 +165,10 @@ export async function createTravelOrder(request, response, next) {
       return response.status(400).json({ success: false, error: { message: 'Travel item price is invalid' } })
     }
 
+    const subtotalPaise = amountPaise
+    const { discountPaise } = await calculateCouponDiscount(client, couponCode, itemType, subtotalPaise)
+    amountPaise -= discountPaise
+
     await client.query('BEGIN')
     if (itemType === 'bus') {
       const seatResult = await client.query(
@@ -182,15 +189,15 @@ export async function createTravelOrder(request, response, next) {
       amount: amountPaise,
       currency: item.currency || 'INR',
       receipt: bookingReference,
-      notes: { itemType, itemId, quantity: String(normalizedQuantity) },
+      notes: { itemType, itemId, quantity: String(normalizedQuantity), couponCode: couponCode || '' },
     })
 
     if (itemType === 'bus') {
       const bookingResult = await client.query(
-        `INSERT INTO bus_bookings (booking_reference, user_id, bus_id, passenger_count, contact, amount_paise, currency)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)
+        `INSERT INTO bus_bookings (booking_reference, user_id, bus_id, passenger_count, contact, amount_paise, coupon_code, discount_paise, currency)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
          RETURNING id, booking_reference AS "bookingReference"`,
-        [bookingReference, request.user?.id || null, itemId, normalizedQuantity, JSON.stringify(details), amountPaise, item.currency || 'INR'],
+          [bookingReference, request.user?.id || null, itemId, normalizedQuantity, JSON.stringify(details), amountPaise, couponCode.trim() || null, discountPaise, item.currency || 'INR'],
       )
       const booking = bookingResult.rows[0]
       await client.query(
@@ -201,14 +208,14 @@ export async function createTravelOrder(request, response, next) {
       await client.query('COMMIT')
       return response.status(201).json({
         success: true,
-        data: { orderId: order.id, amount: order.amount, currency: order.currency, keyId: env.razorpayKeyId, bookingId: booking.id, bookingReference: booking.bookingReference },
+        data: { orderId: order.id, amount: order.amount, currency: order.currency, keyId: env.razorpayKeyId, bookingId: booking.id, bookingReference: booking.bookingReference, subtotal: subtotalPaise / 100, discount: discountPaise / 100 },
       })
     }
 
     const bookingResult = await client.query(
-      `INSERT INTO travel_bookings (booking_reference, user_id, item_type, item_id, details, amount_paise, currency)
-       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id, booking_reference AS "bookingReference"`,
-      [bookingReference, request.user?.id || null, itemType, itemId, JSON.stringify({ ...details, quantity: normalizedQuantity }), amountPaise, item.currency || 'INR'],
+      `INSERT INTO travel_bookings (booking_reference, user_id, item_type, item_id, details, amount_paise, coupon_code, discount_paise, currency)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id, booking_reference AS "bookingReference"`,
+      [bookingReference, request.user?.id || null, itemType, itemId, JSON.stringify({ ...details, quantity: normalizedQuantity }), amountPaise, couponCode.trim() || null, discountPaise, item.currency || 'INR'],
     )
     const booking = bookingResult.rows[0]
     await client.query(
@@ -220,7 +227,7 @@ export async function createTravelOrder(request, response, next) {
 
     return response.status(201).json({
       success: true,
-      data: { orderId: order.id, amount: order.amount, currency: order.currency, keyId: env.razorpayKeyId, bookingId: booking.id, bookingReference: booking.bookingReference },
+      data: { orderId: order.id, amount: order.amount, currency: order.currency, keyId: env.razorpayKeyId, bookingId: booking.id, bookingReference: booking.bookingReference, subtotal: subtotalPaise / 100, discount: discountPaise / 100 },
     })
   } catch (error) {
     await client.query('ROLLBACK').catch(() => {})

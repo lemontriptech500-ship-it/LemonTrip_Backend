@@ -13,7 +13,9 @@ export async function getRecentBookings(request, response, next) {
           'airline', f.airline,
           'flightNumber', f.flight_number,
           'travellers', b.travellers,
-          'contact', b.contact
+          'contact', b.contact,
+          'couponCode', b.coupon_code,
+          'discount', ROUND(b.discount_paise / 100.0, 2)::float
         ) AS details
       FROM flight_bookings b
       LEFT JOIN flights f ON f.id = b.flight_id
@@ -28,7 +30,7 @@ export async function getRecentBookings(request, response, next) {
           WHEN b.item_type = 'package' THEN COALESCE(tp.destination, 'Package booking')
           ELSE INITCAP(b.item_type) || ' booking'
         END AS title,
-        b.details || jsonb_build_object('itemId', b.item_id) AS details
+        b.details || jsonb_build_object('itemId', b.item_id, 'couponCode', b.coupon_code, 'discount', ROUND(b.discount_paise / 100.0, 2)::float) AS details
       FROM travel_bookings b
       LEFT JOIN hotels h ON b.item_type = 'hotel' AND h.id = b.item_id
       LEFT JOIN train_services ts ON b.item_type = 'train' AND ts.id = b.item_id
@@ -44,7 +46,9 @@ export async function getRecentBookings(request, response, next) {
           'busId', b.bus_id,
           'operator', bs.operator,
           'busType', bs.bus_type,
-          'contact', b.contact
+          'contact', b.contact,
+          'couponCode', b.coupon_code,
+          'discount', ROUND(b.discount_paise / 100.0, 2)::float
         ) AS details
       FROM bus_bookings b
       LEFT JOIN bus_services bs ON bs.id = b.bus_id
