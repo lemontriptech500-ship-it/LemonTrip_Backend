@@ -88,6 +88,8 @@ CREATE TABLE IF NOT EXISTS flight_bookings (
   travellers JSONB NOT NULL DEFAULT '[]'::jsonb,
   contact JSONB NOT NULL DEFAULT '{}'::jsonb,
   amount_paise INTEGER NOT NULL CHECK (amount_paise > 0),
+  coupon_code VARCHAR(40),
+  discount_paise INTEGER NOT NULL DEFAULT 0 CHECK (discount_paise >= 0),
   currency CHAR(3) NOT NULL DEFAULT 'INR',
   status VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'confirmed', 'failed', 'cancelled')),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -110,6 +112,28 @@ CREATE TABLE IF NOT EXISTS flight_payments (
 
 CREATE INDEX IF NOT EXISTS idx_flight_bookings_user ON flight_bookings (user_id);
 CREATE INDEX IF NOT EXISTS idx_flight_payments_booking ON flight_payments (booking_id);
+
+CREATE TABLE IF NOT EXISTS coupons (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  code VARCHAR(40) UNIQUE NOT NULL,
+  discount_type VARCHAR(20) NOT NULL CHECK (discount_type IN ('percentage', 'flat')),
+  discount_value NUMERIC(12, 2) NOT NULL CHECK (discount_value > 0),
+  min_order_paise INTEGER NOT NULL DEFAULT 0 CHECK (min_order_paise >= 0),
+  max_discount_paise INTEGER NOT NULL CHECK (max_discount_paise > 0),
+  valid_until DATE NOT NULL,
+  applicable_on TEXT[] NOT NULL DEFAULT '{}',
+  active BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_coupons_code ON coupons (UPPER(code));
+
+INSERT INTO coupons (code, discount_type, discount_value, min_order_paise, max_discount_paise, valid_until, applicable_on)
+VALUES
+  ('FIRST10', 'percentage', 10, 100000, 50000, '2026-12-31', ARRAY['flights', 'hotels', 'bus', 'trains', 'packages']),
+  ('FLY500', 'flat', 500, 300000, 50000, '2026-11-30', ARRAY['flights']),
+  ('HOLIDAY20', 'percentage', 20, 500000, 200000, '2026-10-31', ARRAY['packages'])
+ON CONFLICT (code) DO NOTHING;
 
 CREATE TABLE IF NOT EXISTS blog_posts (
   id VARCHAR(80) PRIMARY KEY,
@@ -240,6 +264,8 @@ CREATE TABLE IF NOT EXISTS travel_bookings (
   item_id VARCHAR(80) NOT NULL,
   details JSONB NOT NULL DEFAULT '{}'::jsonb,
   amount_paise INTEGER NOT NULL CHECK (amount_paise > 0),
+  coupon_code VARCHAR(40),
+  discount_paise INTEGER NOT NULL DEFAULT 0 CHECK (discount_paise >= 0),
   currency CHAR(3) NOT NULL DEFAULT 'INR',
   status VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'confirmed', 'failed', 'cancelled')),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -274,6 +300,8 @@ CREATE TABLE IF NOT EXISTS bus_bookings (
   passenger_count INTEGER NOT NULL CHECK (passenger_count > 0),
   contact JSONB NOT NULL DEFAULT '{}'::jsonb,
   amount_paise INTEGER NOT NULL CHECK (amount_paise > 0),
+  coupon_code VARCHAR(40),
+  discount_paise INTEGER NOT NULL DEFAULT 0 CHECK (discount_paise >= 0),
   currency CHAR(3) NOT NULL DEFAULT 'INR',
   status VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'confirmed', 'failed', 'cancelled')),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
