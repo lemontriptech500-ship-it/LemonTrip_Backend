@@ -76,8 +76,8 @@ export async function verifyFlightPayment(request, response, next) {
       error.status = 503
       throw error
     }
-    const { razorpayOrderId, razorpayPaymentId, razorpaySignature, bookingId } = request.body
-    if (!razorpayOrderId || !razorpayPaymentId || !razorpaySignature || !bookingId) {
+    const { razorpayOrderId, razorpayPaymentId, razorpaySignature, bookingId, itemType = 'travel' } = request.body
+    if (!razorpayOrderId || !razorpayPaymentId || !razorpaySignature || !bookingId || !['bus', 'travel'].includes(itemType)) {
       return response.status(400).json({ success: false, error: { message: 'Payment verification details are required' } })
     }
 
@@ -162,6 +162,20 @@ export async function createTravelOrder(request, response, next) {
       return response.status(400).json({ success: false, error: { message: 'Travel item price is invalid' } })
     }
 
+    await client.query('BEGIN')
+    if (itemType === 'bus') {
+      const seatResult = await client.query(
+        `UPDATE bus_services SET seats_left = seats_left - $1, updated_at = NOW()
+         WHERE id = $2 AND active = TRUE AND seats_left >= $1
+         RETURNING id`,
+        [normalizedQuantity, itemId],
+      )
+      if (!seatResult.rows[0]) {
+        await client.query('ROLLBACK')
+        return response.status(409).json({ success: false, error: { message: 'Not enough seats are available' } })
+      }
+    }
+
     const razorpay = getRazorpay()
     const bookingReference = makeBookingReference()
     const order = await razorpay.orders.create({
@@ -171,7 +185,26 @@ export async function createTravelOrder(request, response, next) {
       notes: { itemType, itemId, quantity: String(normalizedQuantity) },
     })
 
-    await client.query('BEGIN')
+    if (itemType === 'bus') {
+      const bookingResult = await client.query(
+        `INSERT INTO bus_bookings (booking_reference, user_id, bus_id, passenger_count, contact, amount_paise, currency)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
+         RETURNING id, booking_reference AS "bookingReference"`,
+        [bookingReference, request.user?.id || null, itemId, normalizedQuantity, JSON.stringify(details), amountPaise, item.currency || 'INR'],
+      )
+      const booking = bookingResult.rows[0]
+      await client.query(
+        `INSERT INTO bus_payments (booking_id, provider_order_id, amount_paise, currency)
+         VALUES ($1, $2, $3, $4)`,
+        [booking.id, order.id, amountPaise, item.currency || 'INR'],
+      )
+      await client.query('COMMIT')
+      return response.status(201).json({
+        success: true,
+        data: { orderId: order.id, amount: order.amount, currency: order.currency, keyId: env.razorpayKeyId, bookingId: booking.id, bookingReference: booking.bookingReference },
+      })
+    }
+
     const bookingResult = await client.query(
       `INSERT INTO travel_bookings (booking_reference, user_id, item_type, item_id, details, amount_paise, currency)
        VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id, booking_reference AS "bookingReference"`,
@@ -215,8 +248,9 @@ export async function verifyTravelPayment(request, response, next) {
     if (!signaturesMatch) return response.status(400).json({ success: false, error: { message: 'Invalid payment signature' } })
 
     await client.query('BEGIN')
+    const paymentTable = request.body.itemType === 'bus' ? 'bus_payments' : 'travel_payments'
     const paymentResult = await client.query(
-      `UPDATE travel_payments SET provider_payment_id = $1, signature = $2, status = 'paid', paid_at = NOW()
+      `UPDATE ${paymentTable} SET provider_payment_id = $1, signature = $2, status = 'paid', paid_at = NOW()
        WHERE booking_id = $3 AND provider_order_id = $4 AND status = 'created' RETURNING id`,
       [razorpayPaymentId, razorpaySignature, bookingId, razorpayOrderId],
     )
@@ -224,8 +258,9 @@ export async function verifyTravelPayment(request, response, next) {
       await client.query('ROLLBACK')
       return response.status(409).json({ success: false, error: { message: 'Payment is already processed or booking is invalid' } })
     }
+    const bookingTable = request.body.itemType === 'bus' ? 'bus_bookings' : 'travel_bookings'
     const bookingResult = await client.query(
-      `UPDATE travel_bookings SET status = 'confirmed', updated_at = NOW()
+      `UPDATE ${bookingTable} SET status = 'confirmed', updated_at = NOW()
        WHERE id = $1 RETURNING booking_reference AS "bookingReference"`,
       [bookingId],
     )
