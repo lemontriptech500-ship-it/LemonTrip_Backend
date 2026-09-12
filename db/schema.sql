@@ -21,6 +21,53 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS google_id VARCHAR(255) UNIQUE;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar TEXT;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS provider VARCHAR(20) NOT NULL DEFAULT 'local';
 
+CREATE TABLE IF NOT EXISTS wallets (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+  balance_paise BIGINT NOT NULL DEFAULT 0 CHECK (balance_paise >= 0),
+  currency CHAR(3) NOT NULL DEFAULT 'INR',
+  status VARCHAR(20) NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'suspended', 'closed')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS wallet_transactions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  wallet_id UUID NOT NULL REFERENCES wallets(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  transaction_reference VARCHAR(80) NOT NULL UNIQUE,
+  type VARCHAR(10) NOT NULL CHECK (type IN ('CREDIT', 'DEBIT')),
+  source VARCHAR(20) NOT NULL CHECK (source IN ('TOPUP', 'BOOKING', 'REFUND', 'ADJUSTMENT')),
+  amount_paise BIGINT NOT NULL CHECK (amount_paise > 0),
+  balance_before_paise BIGINT NOT NULL CHECK (balance_before_paise >= 0),
+  balance_after_paise BIGINT NOT NULL CHECK (balance_after_paise >= 0),
+  status VARCHAR(20) NOT NULL DEFAULT 'SUCCESS' CHECK (status IN ('PENDING', 'SUCCESS', 'FAILED', 'REVERSED')),
+  description VARCHAR(255) NOT NULL,
+  booking_reference VARCHAR(80),
+  payment_reference VARCHAR(120),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS wallet_topups (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  wallet_id UUID NOT NULL REFERENCES wallets(id) ON DELETE CASCADE,
+  topup_reference VARCHAR(80) NOT NULL UNIQUE,
+  amount_paise BIGINT NOT NULL CHECK (amount_paise > 0),
+  razorpay_order_id VARCHAR(100) NOT NULL UNIQUE,
+  razorpay_payment_id VARCHAR(100) UNIQUE,
+  razorpay_signature TEXT,
+  status VARCHAR(20) NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'SUCCESS', 'FAILED', 'REVERSED')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_wallet_transactions_user_date ON wallet_transactions (user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_wallet_transactions_wallet_date ON wallet_transactions (wallet_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_wallet_topups_user_date ON wallet_topups (user_id, created_at DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_wallet_topups_payment_id ON wallet_topups (razorpay_payment_id) WHERE razorpay_payment_id IS NOT NULL;
+
 CREATE TABLE IF NOT EXISTS flights (
   id VARCHAR(80) PRIMARY KEY,
   origin VARCHAR(10) NOT NULL,
@@ -218,6 +265,37 @@ CREATE TABLE IF NOT EXISTS travel_payments (
 
 CREATE INDEX IF NOT EXISTS idx_travel_bookings_user ON travel_bookings (user_id);
 CREATE INDEX IF NOT EXISTS idx_travel_payments_booking ON travel_payments (booking_id);
+
+CREATE TABLE IF NOT EXISTS bus_bookings (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  booking_reference VARCHAR(32) UNIQUE NOT NULL,
+  user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+  bus_id VARCHAR(80) NOT NULL REFERENCES bus_services(id),
+  passenger_count INTEGER NOT NULL CHECK (passenger_count > 0),
+  contact JSONB NOT NULL DEFAULT '{}'::jsonb,
+  amount_paise INTEGER NOT NULL CHECK (amount_paise > 0),
+  currency CHAR(3) NOT NULL DEFAULT 'INR',
+  status VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'confirmed', 'failed', 'cancelled')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS bus_payments (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  booking_id UUID NOT NULL REFERENCES bus_bookings(id) ON DELETE CASCADE,
+  provider VARCHAR(30) NOT NULL DEFAULT 'razorpay',
+  provider_order_id VARCHAR(100) UNIQUE NOT NULL,
+  provider_payment_id VARCHAR(100) UNIQUE,
+  signature TEXT,
+  amount_paise INTEGER NOT NULL CHECK (amount_paise > 0),
+  currency CHAR(3) NOT NULL DEFAULT 'INR',
+  status VARCHAR(20) NOT NULL DEFAULT 'created' CHECK (status IN ('created', 'paid', 'failed')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  paid_at TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS idx_bus_bookings_user ON bus_bookings (user_id);
+CREATE INDEX IF NOT EXISTS idx_bus_payments_booking ON bus_payments (booking_id);
 
 CREATE TABLE IF NOT EXISTS hotels (
   id VARCHAR(80) PRIMARY KEY,
