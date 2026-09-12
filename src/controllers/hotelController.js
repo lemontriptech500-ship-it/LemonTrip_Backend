@@ -3,8 +3,8 @@ import { pool } from '../config/db.js'
 const hotelFields = `
   id, name,
   catalog->'location' AS location,
-  star_rating AS "starRating",
-  guest_rating AS "guestRating",
+  star_rating::integer AS "starRating",
+  guest_rating::double precision AS "guestRating",
   guest_review_count AS "guestReviewCount",
   description, property_type AS "propertyType",
   catalog->'images' AS images,
@@ -12,7 +12,7 @@ const hotelFields = `
   catalog->>'checkInTime' AS "checkInTime",
   catalog->>'checkOutTime' AS "checkOutTime",
   catalog->'rooms' AS rooms,
-  currency, starting_price AS "startingPrice"
+  currency, starting_price::double precision AS "startingPrice"
 `
 
 export async function search(request, response, next) {
