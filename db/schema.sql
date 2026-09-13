@@ -14,6 +14,16 @@ CREATE TABLE IF NOT EXISTS users (
 
 CREATE INDEX IF NOT EXISTS idx_users_google_id ON users (google_id);
 
+CREATE TABLE IF NOT EXISTS chat_conversations (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  messages JSONB NOT NULL DEFAULT '[]'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_chat_conversations_user_updated ON chat_conversations (user_id, updated_at DESC);
+
 -- Safe to re-run: adds Google auth columns if this schema.sql already ran
 -- before without them (e.g. on an existing local/production database).
 ALTER TABLE users ALTER COLUMN password_hash DROP NOT NULL;
@@ -271,6 +281,11 @@ CREATE TABLE IF NOT EXISTS travel_bookings (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+ALTER TABLE travel_bookings ADD COLUMN IF NOT EXISTS provider VARCHAR(30);
+ALTER TABLE travel_bookings ADD COLUMN IF NOT EXISTS provider_booking_reference VARCHAR(120);
+ALTER TABLE travel_bookings ADD COLUMN IF NOT EXISTS provider_response JSONB;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_travel_bookings_provider_reference ON travel_bookings (provider_booking_reference) WHERE provider_booking_reference IS NOT NULL;
 
 ALTER TABLE travel_bookings DROP CONSTRAINT IF EXISTS travel_bookings_item_type_check;
 ALTER TABLE travel_bookings ADD CONSTRAINT travel_bookings_item_type_check CHECK (item_type IN ('hotel', 'bus', 'train', 'package'));

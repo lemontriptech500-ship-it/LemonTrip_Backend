@@ -3,6 +3,7 @@ import Razorpay from 'razorpay'
 import { env } from '../config/env.js'
 import { pool } from '../config/db.js'
 import { calculateCouponDiscount } from '../services/couponService.js'
+import { checkHotelBedsAvailability, confirmHotelBedsBooking, getHotelBedsHotel } from '../services/hotelbedsService.js'
 
 function getRazorpay() {
   if (!env.razorpayKeyId || !env.razorpayKeySecret) {
@@ -134,8 +135,9 @@ export async function createTravelOrder(request, response, next) {
       return response.status(400).json({ success: false, error: { message: 'A valid travel item, quantity, and contact email are required' } })
     }
 
-    const catalogResult = await client.query(catalogQuery, [itemId])
-    const item = catalogResult.rows[0]
+    const providerHotel = itemType === 'hotel' && itemId.startsWith('hb-') ? getHotelBedsHotel(itemId) : null
+    const catalogResult = providerHotel ? { rows: [] } : await client.query(catalogQuery, [itemId])
+    const item = providerHotel || catalogResult.rows[0]
     if (!item) return response.status(404).json({ success: false, error: { message: 'Travel item not found' } })
     if (itemType === 'bus' && normalizedQuantity > Number(item.seatsLeft)) {
       return response.status(409).json({ success: false, error: { message: 'Not enough seats are available' } })
@@ -147,7 +149,7 @@ export async function createTravelOrder(request, response, next) {
         return response.status(400).json({ success: false, error: { message: 'Hotel room selections and nights are required' } })
       }
 
-      const catalogRooms = item.catalog?.rooms || []
+      const catalogRooms = providerHotel ? item.rooms : item.catalog?.rooms || []
       const roomTotal = details.selections.reduce((total, selection) => {
         const room = catalogRooms.find((candidate) => candidate.id === selection.roomId)
         const rate = room?.rates?.find((candidate) => candidate.id === selection.rateId)
@@ -157,6 +159,15 @@ export async function createTravelOrder(request, response, next) {
         }
         return total + Number(rate.pricePerNight) * roomQuantity
       }, 0)
+      if (providerHotel && !await checkHotelBedsAvailability(providerHotel, details)) {
+        return response.status(409).json({ success: false, error: { message: 'The selected hotel room is no longer available' } })
+      }
+      if (providerHotel && details.selections.some((selection) => {
+        const rate = providerHotel.rooms.flatMap((room) => room.rates).find((candidate) => candidate.id === selection.rateId)
+        return rate?.hotelbeds?.paymentType === 'AT_WEB'
+      })) {
+        return response.status(409).json({ success: false, error: { message: 'This Hotelbeds TEST rate requires supplier payment and cannot use Razorpay. Select an AT_HOTEL rate.' } })
+      }
       amountPaise = Math.round(roomTotal * normalizedQuantity * 100)
     } else {
       amountPaise = Math.round(Number(item.price) * 100 * normalizedQuantity)
@@ -213,9 +224,9 @@ export async function createTravelOrder(request, response, next) {
     }
 
     const bookingResult = await client.query(
-      `INSERT INTO travel_bookings (booking_reference, user_id, item_type, item_id, details, amount_paise, coupon_code, discount_paise, currency)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id, booking_reference AS "bookingReference"`,
-      [bookingReference, request.user?.id || null, itemType, itemId, JSON.stringify({ ...details, quantity: normalizedQuantity }), amountPaise, couponCode.trim() || null, discountPaise, item.currency || 'INR'],
+      `INSERT INTO travel_bookings (booking_reference, user_id, item_type, item_id, details, amount_paise, coupon_code, discount_paise, currency, provider)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id, booking_reference AS "bookingReference"`,
+      [bookingReference, request.user?.id || null, itemType, itemId, JSON.stringify({ ...details, itemId, quantity: normalizedQuantity, ...(providerHotel ? { providerSnapshot: providerHotel } : {}) }), amountPaise, couponCode.trim() || null, discountPaise, item.currency || 'INR', providerHotel ? 'hotelbeds' : null],
     )
     const booking = bookingResult.rows[0]
     await client.query(
@@ -266,12 +277,36 @@ export async function verifyTravelPayment(request, response, next) {
       return response.status(409).json({ success: false, error: { message: 'Payment is already processed or booking is invalid' } })
     }
     const bookingTable = request.body.itemType === 'bus' ? 'bus_bookings' : 'travel_bookings'
-    const bookingResult = await client.query(
-      `UPDATE ${bookingTable} SET status = 'confirmed', updated_at = NOW()
-       WHERE id = $1 RETURNING booking_reference AS "bookingReference"`,
-      [bookingId],
-    )
+    const bookingResult = request.body.itemType === 'bus'
+      ? await client.query(
+        `UPDATE bus_bookings SET status = 'confirmed', updated_at = NOW()
+         WHERE id = $1 RETURNING booking_reference AS "bookingReference"`,
+        [bookingId],
+      )
+      : await client.query(
+        `UPDATE travel_bookings SET status = 'confirmed', updated_at = NOW()
+         WHERE id = $1 RETURNING booking_reference AS "bookingReference", item_type AS "itemType", details, provider`,
+        [bookingId],
+      )
     await client.query('COMMIT')
+
+    if (bookingResult.rows[0]?.provider === 'hotelbeds') {
+      try {
+        const providerResponse = await confirmHotelBedsBooking({
+          booking_reference: bookingResult.rows[0].bookingReference,
+          user_id: request.user?.id || null,
+          details: bookingResult.rows[0].details,
+        })
+        await client.query(
+          `UPDATE travel_bookings SET provider_booking_reference = $1, provider_response = $2, status = 'confirmed', updated_at = NOW() WHERE id = $3`,
+          [providerResponse.reference || providerResponse.booking?.reference, JSON.stringify(providerResponse), bookingId],
+        )
+        return response.json({ success: true, data: { bookingReference: bookingResult.rows[0].bookingReference, providerBookingReference: providerResponse.reference || providerResponse.booking?.reference || null, status: 'confirmed' } })
+      } catch (providerError) {
+        await client.query(`UPDATE travel_bookings SET status = 'failed', updated_at = NOW() WHERE id = $1`, [bookingId])
+        return next(providerError)
+      }
+    }
     return response.json({ success: true, data: { bookingReference: bookingResult.rows[0]?.bookingReference || null, status: 'confirmed' } })
   } catch (error) {
     await client.query('ROLLBACK').catch(() => {})

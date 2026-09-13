@@ -1,4 +1,5 @@
 import { pool } from '../config/db.js'
+import { getHotelBedsHotel, isHotelBedsConfigured, searchHotelBeds } from '../services/hotelbedsService.js'
 
 const hotelFields = `
   id, name,
@@ -17,6 +18,10 @@ const hotelFields = `
 
 export async function search(request, response, next) {
   try {
+    const { checkIn, checkOut, rooms, adults, children } = request.query
+    if (isHotelBedsConfigured() && checkIn && checkOut) {
+      return response.json({ success: true, data: await searchHotelBeds({ destination: request.query.destination, checkIn, checkOut, rooms, adults, children }) })
+    }
     const values = []
     const filters = ['active = TRUE']
     const destination = String(request.query.destination || '').trim()
@@ -42,6 +47,11 @@ export async function search(request, response, next) {
 
 export async function getHotel(request, response, next) {
   try {
+    if (request.params.hotelId.startsWith('hb-')) {
+      const hotel = getHotelBedsHotel(request.params.hotelId)
+      if (!hotel) return response.status(404).json({ success: false, error: { message: 'Hotel availability has expired. Search again.' } })
+      return response.json({ success: true, data: hotel })
+    }
     const result = await pool.query(`SELECT ${hotelFields} FROM hotels WHERE id = $1 AND active = TRUE LIMIT 1`, [request.params.hotelId])
     if (!result.rows[0]) return response.status(404).json({ success: false, error: { message: 'Hotel not found' } })
     return response.json({ success: true, data: result.rows[0] })
