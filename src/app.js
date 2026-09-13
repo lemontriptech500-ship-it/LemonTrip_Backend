@@ -13,6 +13,7 @@ import paymentRoutes from './routes/paymentRoutes.js'
 import bookingRoutes from './routes/bookingRoutes.js'
 import walletRoutes from './routes/walletRoutes.js'
 import couponRoutes from './routes/couponRoutes.js'
+import chatRoutes from './routes/chatRoutes.js'
 import { notFoundHandler, errorHandler } from './middlewares/errorHandler.js'
 
 const app = express()
@@ -42,6 +43,7 @@ app.use('/api/v1/payments', paymentRoutes)
 app.use('/api/v1/bookings', bookingRoutes)
 app.use('/api/v1/wallet', walletRoutes)
 app.use('/api/v1/coupons', couponRoutes)
+app.use('/api/v1/chat', chatRoutes)
 
 app.use(notFoundHandler)
 app.use(errorHandler)
