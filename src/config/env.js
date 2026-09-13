@@ -41,6 +41,11 @@ export const env = {
   hotelbedsMtlsCa: getEnv('HOTELBEDS_MTLS_CA'),
   hotelbedsTimeoutMs: Number(getEnv('HOTELBEDS_TIMEOUT_MS') || 15000),
   hotelbedsPaymentType: getEnv('HOTELBEDS_PAYMENT_TYPE'),
+  irctcApiKey: getEnv('IRCTC_API_KEY'),
+  irctcApiSecret: getEnv('IRCTC_API_SECRET'),
+  irctcBaseUrl: getEnv('IRCTC_BASE_URL'),
+  irctcEnvironment: getEnv('IRCTC_ENVIRONMENT') || 'mock',
+  irctcTimeoutMs: Number(getEnv('IRCTC_TIMEOUT_MS') || 10000),
   frontendUrls: [
     getEnv('FRONTEND_URL') || 'http://localhost:3000',
     getEnv('VERCEL_FRONTEND_URL') || 'https://lemon-trip-frontend-2563.vercel.app',

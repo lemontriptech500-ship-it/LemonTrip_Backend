@@ -4,6 +4,7 @@ import { env } from '../config/env.js'
 import { pool } from '../config/db.js'
 import { calculateCouponDiscount } from '../services/couponService.js'
 import { checkHotelBedsAvailability, confirmHotelBedsBooking, getHotelBedsHotel } from '../services/hotelbedsService.js'
+import { createBooking as createIrctcBooking, getTrain as getIrctcTrain } from '../services/irctcService.js'
 
 function getRazorpay() {
   if (!env.razorpayKeyId || !env.razorpayKeySecret) {
@@ -136,8 +137,10 @@ export async function createTravelOrder(request, response, next) {
     }
 
     const providerHotel = itemType === 'hotel' && itemId.startsWith('hb-') ? getHotelBedsHotel(itemId) : null
-    const catalogResult = providerHotel ? { rows: [] } : await client.query(catalogQuery, [itemId])
-    const item = providerHotel || catalogResult.rows[0]
+    const providerTrain = itemType === 'train' && itemId.startsWith('irctc-') ? await getIrctcTrain(itemId) : null
+    const provider = itemType === 'train' ? 'irctc' : providerHotel ? 'hotelbeds' : null
+    const catalogResult = providerHotel || providerTrain ? { rows: [] } : await client.query(catalogQuery, [itemId])
+    const item = providerHotel || providerTrain || catalogResult.rows[0]
     if (!item) return response.status(404).json({ success: false, error: { message: 'Travel item not found' } })
     if (itemType === 'bus' && normalizedQuantity > Number(item.seatsLeft)) {
       return response.status(409).json({ success: false, error: { message: 'Not enough seats are available' } })
@@ -170,7 +173,7 @@ export async function createTravelOrder(request, response, next) {
       }
       amountPaise = Math.round(roomTotal * normalizedQuantity * 100)
     } else {
-      amountPaise = Math.round(Number(item.price) * 100 * normalizedQuantity)
+      amountPaise = Math.round(Number(item.priceAmount || item.price) * 100 * normalizedQuantity)
     }
     if (!Number.isFinite(amountPaise) || amountPaise <= 0) {
       return response.status(400).json({ success: false, error: { message: 'Travel item price is invalid' } })
@@ -226,7 +229,7 @@ export async function createTravelOrder(request, response, next) {
     const bookingResult = await client.query(
       `INSERT INTO travel_bookings (booking_reference, user_id, item_type, item_id, details, amount_paise, coupon_code, discount_paise, currency, provider)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id, booking_reference AS "bookingReference"`,
-      [bookingReference, request.user?.id || null, itemType, itemId, JSON.stringify({ ...details, itemId, quantity: normalizedQuantity, ...(providerHotel ? { providerSnapshot: providerHotel } : {}) }), amountPaise, couponCode.trim() || null, discountPaise, item.currency || 'INR', providerHotel ? 'hotelbeds' : null],
+      [bookingReference, request.user?.id || null, itemType, itemId, JSON.stringify({ ...details, itemId, quantity: normalizedQuantity, ...(providerHotel ? { providerSnapshot: providerHotel } : {}) }), amountPaise, couponCode.trim() || null, discountPaise, item.currency || 'INR', provider],
     )
     const booking = bookingResult.rows[0]
     await client.query(
@@ -285,7 +288,7 @@ export async function verifyTravelPayment(request, response, next) {
       )
       : await client.query(
         `UPDATE travel_bookings SET status = 'confirmed', updated_at = NOW()
-         WHERE id = $1 RETURNING booking_reference AS "bookingReference", item_type AS "itemType", details, provider`,
+         WHERE id = $1 RETURNING booking_reference AS "bookingReference", item_type AS "itemType", item_id AS "itemId", details, provider`,
         [bookingId],
       )
     await client.query('COMMIT')
@@ -302,6 +305,28 @@ export async function verifyTravelPayment(request, response, next) {
           [providerResponse.reference || providerResponse.booking?.reference, JSON.stringify(providerResponse), bookingId],
         )
         return response.json({ success: true, data: { bookingReference: bookingResult.rows[0].bookingReference, providerBookingReference: providerResponse.reference || providerResponse.booking?.reference || null, status: 'confirmed' } })
+      } catch (providerError) {
+        await client.query(`UPDATE travel_bookings SET status = 'failed', updated_at = NOW() WHERE id = $1`, [bookingId])
+        return next(providerError)
+      }
+    }
+    if (bookingResult.rows[0]?.provider === 'irctc') {
+      try {
+        const details = bookingResult.rows[0].details || {}
+        const providerResponse = await createIrctcBooking({
+          bookingReference: bookingResult.rows[0].bookingReference,
+          train: { trainId: bookingResult.rows[0].itemId, journeyDate: details.journeyDate, trainClass: details.trainClass },
+          passengers: details.passengers?.length ? details.passengers : [{ name: details.email, age: 0, gender: 'U' }],
+          contact: { email: details.email, phone: details.phone },
+        })
+        await client.query(
+          `INSERT INTO irctc_bookings (travel_booking_id, pnr, ticket_number, provider_reference, passenger_details, ticket_details, provider_response, status)
+           SELECT id, $1, $2, $3, $4, $5, $6, $7 FROM travel_bookings WHERE id = $8
+           ON CONFLICT (travel_booking_id) DO UPDATE SET pnr = EXCLUDED.pnr, ticket_number = EXCLUDED.ticket_number, provider_reference = EXCLUDED.provider_reference, passenger_details = EXCLUDED.passenger_details, ticket_details = EXCLUDED.ticket_details, provider_response = EXCLUDED.provider_response, status = EXCLUDED.status, updated_at = NOW()`,
+          [providerResponse.pnr || null, providerResponse.ticketNumber || null, providerResponse.providerReference || providerResponse.pnr || null, JSON.stringify(providerResponse.passengers || details.passengers || []), JSON.stringify(providerResponse), JSON.stringify(providerResponse), providerResponse.status || 'CONFIRMED', bookingId],
+        )
+        await client.query(`UPDATE travel_bookings SET provider_booking_reference = $1, provider_response = $2, updated_at = NOW() WHERE id = $3`, [providerResponse.pnr || providerResponse.ticketNumber, JSON.stringify(providerResponse), bookingId])
+        return response.json({ success: true, data: { bookingReference: bookingResult.rows[0].bookingReference, pnr: providerResponse.pnr || null, ticketNumber: providerResponse.ticketNumber || null, status: providerResponse.status || 'CONFIRMED' } })
       } catch (providerError) {
         await client.query(`UPDATE travel_bookings SET status = 'failed', updated_at = NOW() WHERE id = $1`, [bookingId])
         return next(providerError)
