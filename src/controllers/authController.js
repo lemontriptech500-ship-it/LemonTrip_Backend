@@ -88,18 +88,13 @@ export async function googleAuth(request, response, next) {
           googleId: profile.googleId,
           avatar: profile.avatar,
         })
-      } else if (mode === 'signup') {
-        // 3. Brand new user signing up via Google
+      } else {
+        // 3. First Google authentication: create the account for either auth mode.
         user = await createGoogleUser({
           name: profile.name,
           email: profile.email,
           googleId: profile.googleId,
           avatar: profile.avatar,
-        })
-      } else {
-        return response.status(404).json({
-          success: false,
-          error: { message: 'No account found for this Google account. Please create an account first.' },
         })
       }
     }
