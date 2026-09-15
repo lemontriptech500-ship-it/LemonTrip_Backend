@@ -311,6 +311,16 @@ ALTER TABLE travel_bookings ADD COLUMN IF NOT EXISTS cancellation_policy TEXT;
 ALTER TABLE travel_bookings ADD COLUMN IF NOT EXISTS check_in DATE;
 ALTER TABLE travel_bookings ADD COLUMN IF NOT EXISTS check_out DATE;
 ALTER TABLE travel_bookings ADD COLUMN IF NOT EXISTS supplier_metadata JSONB NOT NULL DEFAULT '{}'::jsonb;
+ALTER TABLE travel_bookings ADD COLUMN IF NOT EXISTS pnr VARCHAR(40);
+ALTER TABLE travel_bookings ADD COLUMN IF NOT EXISTS supplier_status VARCHAR(40);
+ALTER TABLE travel_bookings ADD COLUMN IF NOT EXISTS supplier_fare NUMERIC(12, 2);
+ALTER TABLE travel_bookings ADD COLUMN IF NOT EXISTS supplier_currency CHAR(3);
+ALTER TABLE travel_bookings ADD COLUMN IF NOT EXISTS cancellation_status VARCHAR(40);
+ALTER TABLE travel_bookings ADD COLUMN IF NOT EXISTS refund_status VARCHAR(40);
+ALTER TABLE travel_bookings ADD COLUMN IF NOT EXISTS refund_amount_paise INTEGER;
+ALTER TABLE travel_bookings ADD COLUMN IF NOT EXISTS idempotency_key VARCHAR(120);
+ALTER TABLE travel_bookings ADD COLUMN IF NOT EXISTS supplier_raw_response JSONB;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_travel_bookings_idempotency_key ON travel_bookings (idempotency_key) WHERE idempotency_key IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS travel_payments (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

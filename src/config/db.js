@@ -69,6 +69,16 @@ export async function connectDatabase() {
     await client.query('ALTER TABLE travel_bookings ADD COLUMN IF NOT EXISTS check_in DATE')
     await client.query('ALTER TABLE travel_bookings ADD COLUMN IF NOT EXISTS check_out DATE')
     await client.query("ALTER TABLE travel_bookings ADD COLUMN IF NOT EXISTS supplier_metadata JSONB NOT NULL DEFAULT '{}'::jsonb")
+    await client.query('ALTER TABLE travel_bookings ADD COLUMN IF NOT EXISTS pnr VARCHAR(40)')
+    await client.query('ALTER TABLE travel_bookings ADD COLUMN IF NOT EXISTS supplier_status VARCHAR(40)')
+    await client.query('ALTER TABLE travel_bookings ADD COLUMN IF NOT EXISTS supplier_fare NUMERIC(12, 2)')
+    await client.query('ALTER TABLE travel_bookings ADD COLUMN IF NOT EXISTS supplier_currency CHAR(3)')
+    await client.query('ALTER TABLE travel_bookings ADD COLUMN IF NOT EXISTS cancellation_status VARCHAR(40)')
+    await client.query('ALTER TABLE travel_bookings ADD COLUMN IF NOT EXISTS refund_status VARCHAR(40)')
+    await client.query('ALTER TABLE travel_bookings ADD COLUMN IF NOT EXISTS refund_amount_paise INTEGER')
+    await client.query('ALTER TABLE travel_bookings ADD COLUMN IF NOT EXISTS idempotency_key VARCHAR(120)')
+    await client.query('ALTER TABLE travel_bookings ADD COLUMN IF NOT EXISTS supplier_raw_response JSONB')
+    await client.query('CREATE UNIQUE INDEX IF NOT EXISTS idx_travel_bookings_idempotency_key ON travel_bookings (idempotency_key) WHERE idempotency_key IS NOT NULL')
     console.log('PostgreSQL connected')
     return true
   } finally {
