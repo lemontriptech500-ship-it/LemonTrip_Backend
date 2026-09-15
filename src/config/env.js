@@ -33,6 +33,17 @@ export const env = {
   aiBaseUrl: getEnv('AI_BASE_URL') || 'https://api.openai.com/v1',
   aiModel: getEnv('AI_MODEL') || 'gpt-4o-mini',
   aiTimeoutMs: Number(getEnv('AI_TIMEOUT_MS') || 45000),
+  hotelbeds: {
+    environment: getEnv('HOTELBEDS_ENVIRONMENT') || 'test',
+    baseUrl: getEnv('HOTELBEDS_BASE_URL') || 'https://api.test.hotelbeds.com/hotel-api/1.0',
+    contentBaseUrl: getEnv('HOTELBEDS_CONTENT_BASE_URL') || 'https://api.test.hotelbeds.com/hotel-content-api/1.0',
+    apiKey: getEnv('HOTELBEDS_API_KEY'),
+    apiSecret: getEnv('HOTELBEDS_API_SECRET'),
+    timeoutMs: Number(getEnv('HOTELBEDS_TIMEOUT_MS') || 15000),
+    certPath: getEnv('HOTELBEDS_CERT_PATH') || getEnv('HOTELBEDS_MTLS_CERT'),
+    keyPath: getEnv('HOTELBEDS_KEY_PATH') || getEnv('HOTELBEDS_MTLS_KEY'),
+    caPath: getEnv('HOTELBEDS_CA_PATH') || getEnv('HOTELBEDS_MTLS_CA'),
+  },
   resendApiKey: getEnv('RESEND_API_KEY'),
   newsletterFromEmail: getEnv('NEWSLETTER_FROM_EMAIL') || 'LemonTrip <onboarding@resend.dev>',
   adminEmails: configuredAdminEmails.split(',').map((email) => email.trim().toLowerCase()).filter(Boolean),
@@ -51,4 +62,8 @@ export const env = {
 
 if (env.nodeEnv !== 'test' && (!env.razorpayKeyId || !env.razorpayKeySecret)) {
   console.warn('Razorpay is not configured. Set RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET in backendLemonTrip/.env before using payments.')
+}
+
+if (env.nodeEnv !== 'test' && ((env.hotelbeds.apiKey && !env.hotelbeds.apiSecret) || (!env.hotelbeds.apiKey && env.hotelbeds.apiSecret))) {
+  console.warn('Hotelbeds is partially configured. Set both HOTELBEDS_API_KEY and HOTELBEDS_API_SECRET before using hotel search.')
 }

@@ -298,6 +298,19 @@ CREATE TABLE IF NOT EXISTS travel_bookings (
 
 ALTER TABLE travel_bookings DROP CONSTRAINT IF EXISTS travel_bookings_item_type_check;
 ALTER TABLE travel_bookings ADD CONSTRAINT travel_bookings_item_type_check CHECK (item_type IN ('hotel', 'bus', 'train', 'package'));
+ALTER TABLE travel_bookings DROP CONSTRAINT IF EXISTS travel_bookings_status_check;
+ALTER TABLE travel_bookings ADD CONSTRAINT travel_bookings_status_check CHECK (status IN ('pending', 'confirmed', 'failed', 'cancelled', 'PENDING_PAYMENT', 'PAYMENT_SUCCESS', 'BOOKING_IN_PROGRESS', 'CONFIRMED', 'BOOKING_FAILED', 'CANCELLED', 'REFUND_PENDING', 'REFUNDED'));
+ALTER TABLE travel_bookings ADD COLUMN IF NOT EXISTS supplier VARCHAR(40);
+ALTER TABLE travel_bookings ADD COLUMN IF NOT EXISTS supplier_hotel_code VARCHAR(80);
+ALTER TABLE travel_bookings ADD COLUMN IF NOT EXISTS supplier_rate_key TEXT;
+ALTER TABLE travel_bookings ADD COLUMN IF NOT EXISTS supplier_booking_reference VARCHAR(120);
+ALTER TABLE travel_bookings ADD COLUMN IF NOT EXISTS supplier_confirmation_number VARCHAR(120);
+ALTER TABLE travel_bookings ADD COLUMN IF NOT EXISTS supplier_amount NUMERIC(12, 2);
+ALTER TABLE travel_bookings ADD COLUMN IF NOT EXISTS supplier_currency CHAR(3);
+ALTER TABLE travel_bookings ADD COLUMN IF NOT EXISTS cancellation_policy TEXT;
+ALTER TABLE travel_bookings ADD COLUMN IF NOT EXISTS check_in DATE;
+ALTER TABLE travel_bookings ADD COLUMN IF NOT EXISTS check_out DATE;
+ALTER TABLE travel_bookings ADD COLUMN IF NOT EXISTS supplier_metadata JSONB NOT NULL DEFAULT '{}'::jsonb;
 
 CREATE TABLE IF NOT EXISTS travel_payments (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
