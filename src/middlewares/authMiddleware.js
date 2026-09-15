@@ -18,3 +18,10 @@ export function requireAuth(request, response, next) {
     return response.status(401).json({ success: false, error: { message: 'Invalid or expired token' } })
   }
 }
+
+export function requireAdmin(request, response, next) {
+  if (!env.adminEmails.includes(String(request.user?.email || '').toLowerCase())) {
+    return response.status(403).json({ success: false, error: { message: 'Administrator access required' } })
+  }
+  return next()
+}

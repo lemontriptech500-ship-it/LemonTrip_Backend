@@ -11,6 +11,7 @@ function getEnv(name) {
 
 const requiredInProduction = ['DATABASE_URL', 'JWT_SECRET', 'RAZORPAY_KEY_ID', 'RAZORPAY_KEY_SECRET']
 const configuredGoogleClientId = getEnv('GOOGLE_CLIENT_ID')
+const configuredAdminEmails = getEnv('ADMIN_EMAILS')
 
 if (getEnv('NODE_ENV') === 'production') {
   const missing = requiredInProduction.filter((key) => !getEnv(key))
@@ -22,6 +23,7 @@ if (getEnv('NODE_ENV') === 'production') {
 export const env = {
   nodeEnv: getEnv('NODE_ENV') || 'development',
   port: Number(getEnv('PORT') || 5000),
+  newsletterUnsubscribeBaseUrl: getEnv('NEWSLETTER_UNSUBSCRIBE_BASE_URL') || `http://localhost:${Number(getEnv('PORT') || 5000)}/api/v1/newsletter`,
   databaseUrl: getEnv('DATABASE_URL'),
   jwtSecret: getEnv('JWT_SECRET') || 'development-only-secret',
   googleClientId: configuredGoogleClientId.startsWith('replace-with-') ? '' : configuredGoogleClientId,
@@ -46,6 +48,16 @@ export const env = {
   irctcBaseUrl: getEnv('IRCTC_BASE_URL'),
   irctcEnvironment: getEnv('IRCTC_ENVIRONMENT') || 'mock',
   irctcTimeoutMs: Number(getEnv('IRCTC_TIMEOUT_MS') || 10000),
+  resendApiKey: getEnv('RESEND_API_KEY'),
+  newsletterFromEmail: getEnv('NEWSLETTER_FROM_EMAIL') || 'LemonTrip <onboarding@resend.dev>',
+  adminEmails: configuredAdminEmails.split(',').map((email) => email.trim().toLowerCase()).filter(Boolean),
+  smtpHost: getEnv('SMTP_HOST'),
+  smtpPort: Number(getEnv('SMTP_PORT') || 587),
+  smtpSecure: getEnv('SMTP_SECURE') === 'true',
+  smtpUser: getEnv('SMTP_USER'),
+  smtpPassword: getEnv('SMTP_PASSWORD'),
+  contactCompanyEmail: getEnv('CONTACT_COMPANY_EMAIL') || 'lemontripindia@gmail.com',
+  contactFromEmail: getEnv('CONTACT_FROM_EMAIL') || getEnv('SMTP_USER'),
   frontendUrls: [
     getEnv('FRONTEND_URL') || 'http://localhost:3000',
     getEnv('VERCEL_FRONTEND_URL') || 'https://lemon-trip-frontend-2563.vercel.app',

@@ -91,8 +91,31 @@ server, and confirms the booking only after verification. Card and UPI details
 are handled by Razorpay Checkout and are not stored by LemonTrip.
 - `GET /api/v1/visa/services`
 - `POST /api/v1/visa/applications` (Bearer token required)
+- `POST /api/v1/newsletter/subscribe`
+- `POST /api/v1/newsletter/unsubscribe`
+- `GET /api/v1/newsletter/unsubscribe?token=...` (signed email unsubscribe link)
+- `POST /api/v1/newsletter/send` (Bearer token for an email listed in `ADMIN_EMAILS`)
+- `POST /api/v1/contact`
 
 Responses use the shared shape `{ success, data, error }`.
+
+### Resend newsletter setup
+
+Create a Resend account, verify the sending domain, and configure these backend
+variables. Keep `RESEND_API_KEY` server-side and never add it to frontend
+environment variables:
+
+```env
+RESEND_API_KEY=re_your_server_key
+NEWSLETTER_FROM_EMAIL=LemonTrip <news@your-verified-domain.com>
+NEWSLETTER_UNSUBSCRIBE_BASE_URL=https://api.example.com/api/v1/newsletter
+ADMIN_EMAILS=admin@example.com
+```
+
+The admin endpoint accepts `{ "subject": "...", "content": "<p>...</p>" }`.
+Each active subscriber receives an individual email with a signed, expiring
+unsubscribe link. Unsubscribed records are retained and excluded from future
+send jobs.
 
 ## Testing
 
