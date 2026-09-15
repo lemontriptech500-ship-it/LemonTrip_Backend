@@ -20,9 +20,9 @@ export async function search(request, response, next) {
 
 export async function getHotel(request, response, next) {
   try {
-    const { checkIn, checkOut, rooms = 1, adults = 2, children = 0, childAges = '', nationality = 'IN', currency = 'INR' } = request.query
-    if (!checkIn || !checkOut) return response.status(400).json({ success: false, error: { message: 'Check-in and check-out are required to load hotel rates.' } })
-    const data = await searchHotels({ destination: request.params.hotelId, checkIn, checkOut, rooms, adults, children, childAges: String(childAges).split(',').filter(Boolean), nationality, currency })
+    const { destination, checkIn, checkOut, rooms = 1, adults = 2, children = 0, childAges = '', nationality = 'IN', currency = 'INR' } = request.query
+    if (!destination || !checkIn || !checkOut) return response.status(400).json({ success: false, error: { message: 'Destination, check-in, and check-out are required to load hotel rates.' } })
+    const data = await searchHotels({ destination, hotelCode: request.params.hotelId, checkIn, checkOut, rooms, adults, children, childAges: String(childAges).split(',').filter(Boolean), nationality, currency })
     const hotel = (data.hotels?.hotels || []).find((item) => item.id === request.params.hotelId)
     if (!hotel) return response.status(404).json({ success: false, error: { message: 'Hotel not found or unavailable for these dates.' } })
     return response.json({ success: true, data: hotel })

@@ -28,9 +28,10 @@ test('Hotelbeds search formats availability input and never calls the network in
     return { hotels: { hotels: [{ code: '123', name: 'Test Hotel', destinationName: 'Delhi', rooms: [] }] } }
   })
   t.after(() => setHotelbedsRequestOverride(null))
-  const result = await searchHotels({ destination: 'Delhi', checkIn: '2026-10-01', checkOut: '2026-10-03', rooms: 1, adults: 2 })
+  const result = await searchHotels({ destination: 'Delhi', hotelCode: '123', checkIn: '2026-10-01', checkOut: '2026-10-03', rooms: 1, adults: 2 })
   assert.equal(request.method, 'POST')
   assert.equal(request.path, '/hotels')
   assert.deepEqual(request.body.stay, { checkIn: '2026-10-01', checkOut: '2026-10-03' })
+  assert.deepEqual(request.body.hotels, { codes: ['123'] })
   assert.equal(result.hotels.hotels[0].supplier, 'HOTELBEDS')
 })

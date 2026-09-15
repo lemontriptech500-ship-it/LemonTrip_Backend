@@ -167,7 +167,7 @@ async function resolveDestination(destination) {
   return match.code
 }
 
-export async function searchHotels({ destination, checkIn, checkOut, rooms, adults, children = 0, childAges = [], nationality = 'IN', currency = 'INR' }) {
+export async function searchHotels({ destination, hotelCode, checkIn, checkOut, rooms, adults, children = 0, childAges = [], nationality = 'IN', currency = 'INR' }) {
   const destinationCode = await resolveDestination(destination)
   const response = await requestJson({
     baseUrl: env.hotelbeds.baseUrl,
@@ -177,6 +177,7 @@ export async function searchHotels({ destination, checkIn, checkOut, rooms, adul
       stay: { checkIn, checkOut },
       occupancies: [{ rooms: Number(rooms), adults: Number(adults), children: Number(children), paxes: childAges.map((age) => ({ type: 'CH', age: Number(age) })) }],
       destinations: [{ code: destinationCode }],
+      ...(hotelCode ? { hotels: { codes: [String(hotelCode)] } } : {}),
       sourceMarket: nationality,
       language: 'ENG',
       currency,
