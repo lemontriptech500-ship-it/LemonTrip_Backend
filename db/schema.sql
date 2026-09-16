@@ -38,6 +38,16 @@ CREATE TABLE IF NOT EXISTS users (
 
 CREATE INDEX IF NOT EXISTS idx_users_google_id ON users (google_id);
 
+CREATE TABLE IF NOT EXISTS chat_conversations (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  messages JSONB NOT NULL DEFAULT '[]'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_chat_conversations_user_updated ON chat_conversations (user_id, updated_at DESC);
+
 -- Safe to re-run: adds Google auth columns if this schema.sql already ran
 -- before without them (e.g. on an existing local/production database).
 ALTER TABLE users ALTER COLUMN password_hash DROP NOT NULL;
@@ -296,6 +306,11 @@ CREATE TABLE IF NOT EXISTS travel_bookings (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+ALTER TABLE travel_bookings ADD COLUMN IF NOT EXISTS provider VARCHAR(30);
+ALTER TABLE travel_bookings ADD COLUMN IF NOT EXISTS provider_booking_reference VARCHAR(120);
+ALTER TABLE travel_bookings ADD COLUMN IF NOT EXISTS provider_response JSONB;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_travel_bookings_provider_reference ON travel_bookings (provider_booking_reference) WHERE provider_booking_reference IS NOT NULL;
+
 ALTER TABLE travel_bookings DROP CONSTRAINT IF EXISTS travel_bookings_item_type_check;
 ALTER TABLE travel_bookings ADD CONSTRAINT travel_bookings_item_type_check CHECK (item_type IN ('hotel', 'bus', 'train', 'package'));
 ALTER TABLE travel_bookings DROP CONSTRAINT IF EXISTS travel_bookings_status_check;
@@ -338,6 +353,24 @@ CREATE TABLE IF NOT EXISTS travel_payments (
 
 CREATE INDEX IF NOT EXISTS idx_travel_bookings_user ON travel_bookings (user_id);
 CREATE INDEX IF NOT EXISTS idx_travel_payments_booking ON travel_payments (booking_id);
+
+CREATE TABLE IF NOT EXISTS irctc_bookings (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  travel_booking_id UUID NOT NULL UNIQUE REFERENCES travel_bookings(id) ON DELETE CASCADE,
+  provider VARCHAR(30) NOT NULL DEFAULT 'irctc',
+  pnr VARCHAR(30),
+  ticket_number VARCHAR(80),
+  provider_reference VARCHAR(120),
+  passenger_details JSONB NOT NULL DEFAULT '[]'::jsonb,
+  ticket_details JSONB NOT NULL DEFAULT '{}'::jsonb,
+  provider_response JSONB NOT NULL DEFAULT '{}'::jsonb,
+  status VARCHAR(30) NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'CONFIRMED', 'CANCELLED', 'FAILED')),
+  refund_amount_paise INTEGER NOT NULL DEFAULT 0 CHECK (refund_amount_paise >= 0),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_irctc_bookings_pnr ON irctc_bookings (pnr) WHERE pnr IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS bus_bookings (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
