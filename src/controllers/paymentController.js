@@ -5,6 +5,7 @@ import { pool } from '../config/db.js'
 import { calculateCouponDiscount } from '../services/couponService.js'
 import { checkHotelBedsAvailability, confirmHotelBedsBooking, getHotelBedsHotel } from '../services/hotelbedsService.js'
 import { createBooking as createIrctcBooking, getTrain as getIrctcTrain } from '../services/irctcService.js'
+import { confirmTrainWithSupplier } from '../services/trainBookingService.js'
 
 function getRazorpay() {
   if (!env.razorpayKeyId || !env.razorpayKeySecret) {
@@ -135,6 +136,18 @@ export async function createTravelOrder(request, response, next) {
     if (!catalogQuery || !itemId || !Number.isInteger(normalizedQuantity) || normalizedQuantity < 1 || !details || typeof details !== 'object' || !details.email) {
       return response.status(400).json({ success: false, error: { message: 'A valid travel item, quantity, and contact email are required' } })
     }
+    if (itemType === 'train' && details.idempotencyKey) {
+      const existing = await client.query(
+        `SELECT b.id, b.booking_reference AS "bookingReference", b.amount_paise, b.currency, p.provider_order_id
+         FROM travel_bookings b JOIN travel_payments p ON p.booking_id = b.id
+         WHERE b.idempotency_key = $1 AND b.user_id = $2 LIMIT 1`,
+        [String(details.idempotencyKey), request.user?.id || null],
+      )
+      if (existing.rows[0]) {
+        const booking = existing.rows[0]
+        return response.status(200).json({ success: true, data: { orderId: booking.provider_order_id, amount: booking.amount_paise, currency: booking.currency, keyId: env.razorpayKeyId, bookingId: booking.id, bookingReference: booking.bookingReference } })
+      }
+    }
 
     const providerHotel = itemType === 'hotel' && itemId.startsWith('hb-') ? getHotelBedsHotel(itemId) : null
     const providerTrain = itemType === 'train' && itemId.startsWith('irctc-') ? await getIrctcTrain(itemId) : null
@@ -227,9 +240,9 @@ export async function createTravelOrder(request, response, next) {
     }
 
     const bookingResult = await client.query(
-      `INSERT INTO travel_bookings (booking_reference, user_id, item_type, item_id, details, amount_paise, coupon_code, discount_paise, currency, provider)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id, booking_reference AS "bookingReference"`,
-      [bookingReference, request.user?.id || null, itemType, itemId, JSON.stringify({ ...details, itemId, quantity: normalizedQuantity, ...(providerHotel ? { providerSnapshot: providerHotel } : {}) }), amountPaise, couponCode.trim() || null, discountPaise, item.currency || 'INR', provider],
+      `INSERT INTO travel_bookings (booking_reference, user_id, item_type, item_id, details, amount_paise, coupon_code, discount_paise, currency, status, idempotency_key)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id, booking_reference AS "bookingReference"`,
+      [bookingReference, request.user?.id || null, itemType, itemId, JSON.stringify({ ...details, itemId, quantity: normalizedQuantity, ...(providerHotel ? { providerSnapshot: providerHotel } : {}) }), amountPaise, couponCode.trim() || null, discountPaise, item.currency || 'INR', itemType === 'train' ? 'PENDING_PAYMENT' : 'pending', itemType === 'train' ? (details.idempotencyKey || null) : null],
     )
     const booking = bookingResult.rows[0]
     await client.query(
@@ -278,6 +291,24 @@ export async function verifyTravelPayment(request, response, next) {
     if (!paymentResult.rows[0]) {
       await client.query('ROLLBACK')
       return response.status(409).json({ success: false, error: { message: 'Payment is already processed or booking is invalid' } })
+    }
+    if (request.body.itemType === 'train') {
+      const trainResult = await client.query(
+        `SELECT id, booking_reference AS "bookingReference", details FROM travel_bookings WHERE id = $1 AND item_type = 'train' LIMIT 1`,
+        [bookingId],
+      )
+      if (!trainResult.rows[0]) {
+        await client.query('ROLLBACK')
+        return response.status(404).json({ success: false, error: { message: 'Train booking not found' } })
+      }
+      await client.query("UPDATE travel_bookings SET status = 'PAYMENT_SUCCESS', supplier_status = 'PAYMENT_SUCCESS', updated_at = NOW() WHERE id = $1", [bookingId])
+      await client.query('COMMIT')
+      try {
+        const confirmed = await confirmTrainWithSupplier(client, { id: bookingId, bookingReference: trainResult.rows[0].bookingReference, details: trainResult.rows[0].details })
+        return response.json({ success: true, data: { bookingReference: trainResult.rows[0].bookingReference, ...confirmed } })
+      } catch (error) {
+        return response.status(error.status || 502).json({ success: false, error: { message: error.status === 501 ? 'Payment succeeded, but no authorized rail provider is configured. The train ticket is not confirmed.' : 'Payment succeeded, but the rail provider could not confirm the ticket.' } })
+      }
     }
     const bookingTable = request.body.itemType === 'bus' ? 'bus_bookings' : 'travel_bookings'
     const bookingResult = request.body.itemType === 'bus'
