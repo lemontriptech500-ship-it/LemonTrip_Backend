@@ -59,6 +59,18 @@ export async function submitContact(request, response, next) {
       await pool.query('UPDATE contact_messages SET status = $1 WHERE id = $2', ['email_sent', saved.rows[0].id])
     } catch (error) {
       await pool.query('UPDATE contact_messages SET status = $1 WHERE id = $2', ['email_failed', saved.rows[0].id])
+      console.error('Contact email delivery failed', {
+        code: error.code,
+        command: error.command,
+        responseCode: error.responseCode,
+        response: error.response,
+        message: error.message,
+        smtpHostConfigured: Boolean(process.env.SMTP_HOST),
+        smtpUserConfigured: Boolean(process.env.SMTP_USER),
+        smtpPasswordConfigured: Boolean(process.env.SMTP_PASSWORD),
+        contactFromConfigured: Boolean(process.env.CONTACT_FROM_EMAIL),
+        contactRecipientConfigured: Boolean(process.env.CONTACT_COMPANY_EMAIL),
+      })
       return response.status(error.status || 502).json({ success: false, error: { message: 'Your message was saved, but we could not notify the LemonTrip team. Please try again later.' } })
     }
     return response.status(201).json({ success: true, data: { message: 'Thanks for reaching out. The LemonTrip team will get back to you soon.' } })
