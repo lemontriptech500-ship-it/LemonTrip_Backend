@@ -56,6 +56,19 @@ export async function connectDatabase() {
       )
     `)
     await client.query('CREATE INDEX IF NOT EXISTS idx_contact_messages_created_at ON contact_messages (created_at DESC)')
+    await client.query("ALTER TABLE travel_packages ADD COLUMN IF NOT EXISTS category VARCHAR(20) NOT NULL DEFAULT 'international'")
+    await client.query("UPDATE travel_packages SET category = 'international' WHERE category IS NULL OR category NOT IN ('national', 'international')")
+    await client.query(`
+      INSERT INTO travel_packages (id, destination, duration, description, starting_price, highlights, image_fallback_color, image_url, category, price_amount, currency)
+      VALUES
+        ('pkg-national-delhi', 'Delhi Heritage Trail', '3 Days, 2 Nights', 'Explore Mughal landmarks, lively markets, and the historic heart of India.', 'From INR 18,900', ARRAY['Red Fort', 'India Gate', 'Old Delhi Food Walk'], 'bg-[var(--color-secondary-soft)]', 'https://images.unsplash.com/photo-1587474260584-136574528ed5?w=1200&q=85', 'national', 18900, 'INR'),
+        ('pkg-national-punjab', 'Punjab Culture & Countryside', '4 Days, 3 Nights', 'Experience Punjabi hospitality, flavorful cuisine, and vibrant countryside traditions.', 'From INR 24,900', ARRAY['Golden Temple', 'Punjabi Cuisine', 'Village Experience'], 'bg-[var(--color-accent-soft)]', 'https://images.unsplash.com/photo-1609947017136-9daf32a5eb16?w=1200&q=85', 'national', 24900, 'INR'),
+        ('pkg-national-amritsar', 'Amritsar Spiritual Escape', '3 Days, 2 Nights', 'Discover Amritsar through its sacred landmarks, history, and unforgettable local flavors.', 'From INR 16,900', ARRAY['Golden Temple', 'Wagah Border', 'Jallianwala Bagh'], 'bg-[var(--color-primary-soft)]', 'https://images.unsplash.com/photo-1609947017136-9daf32a5eb16?w=1200&q=85', 'national', 16900, 'INR'),
+        ('pkg-national-goa', 'Goa Beach Getaway', '5 Days, 4 Nights', 'Unwind on Goa beaches with coastal food, heritage walks, and easy island time.', 'From INR 29,900', ARRAY['Beach Time', 'Old Goa Churches', 'Coastal Cuisine'], 'bg-[var(--color-accent-soft)]', 'https://images.unsplash.com/photo-1512343879784-a960bf40e7f2?w=1200&q=85', 'national', 29900, 'INR'),
+        ('pkg-national-kashmir', 'Kashmir Valley Escape', '6 Days, 5 Nights', 'Travel through serene valleys, mountain views, and the calm waters of Dal Lake.', 'From INR 39,900', ARRAY['Dal Lake', 'Gulmarg', 'Pahalgam'], 'bg-[var(--color-secondary-soft)]', 'https://images.unsplash.com/photo-1595815771614-ade9d652a65d?w=1200&q=85', 'national', 39900, 'INR'),
+        ('pkg-national-kerala', 'Kerala Backwaters & Hills', '6 Days, 5 Nights', 'Combine peaceful backwaters, lush hill country, and Kerala cultural experiences.', 'From INR 34,900', ARRAY['Houseboat Stay', 'Munnar Hills', 'Kerala Cuisine'], 'bg-[var(--color-primary-soft)]', 'https://images.unsplash.com/photo-1602216056096-3b40cc0c9944?w=1200&q=85', 'national', 34900, 'INR')
+      ON CONFLICT (id) DO NOTHING
+    `)
     await client.query('ALTER TABLE travel_bookings DROP CONSTRAINT IF EXISTS travel_bookings_status_check')
     await client.query("ALTER TABLE travel_bookings ADD CONSTRAINT travel_bookings_status_check CHECK (status IN ('pending', 'confirmed', 'failed', 'cancelled', 'PENDING_PAYMENT', 'PAYMENT_SUCCESS', 'BOOKING_IN_PROGRESS', 'CONFIRMED', 'BOOKING_FAILED', 'CANCELLED', 'REFUND_PENDING', 'REFUNDED'))")
     await client.query('ALTER TABLE travel_bookings ADD COLUMN IF NOT EXISTS supplier VARCHAR(40)')

@@ -245,6 +245,7 @@ CREATE TABLE IF NOT EXISTS travel_packages (
   highlights TEXT[] NOT NULL DEFAULT '{}',
   image_fallback_color VARCHAR(120) NOT NULL,
   image_url TEXT,
+  category VARCHAR(20) NOT NULL DEFAULT 'international' CHECK (category IN ('national', 'international')),
   price_amount NUMERIC(12, 2) NOT NULL DEFAULT 0 CHECK (price_amount > 0),
   currency CHAR(3) NOT NULL DEFAULT 'INR',
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -252,12 +253,20 @@ CREATE TABLE IF NOT EXISTS travel_packages (
 
 ALTER TABLE travel_packages ADD COLUMN IF NOT EXISTS price_amount NUMERIC(12, 2) NOT NULL DEFAULT 0;
 ALTER TABLE travel_packages ADD COLUMN IF NOT EXISTS currency CHAR(3) NOT NULL DEFAULT 'INR';
+ALTER TABLE travel_packages ADD COLUMN IF NOT EXISTS category VARCHAR(20) NOT NULL DEFAULT 'international';
+UPDATE travel_packages SET category = 'international' WHERE category IS NULL OR category NOT IN ('national', 'international');
 
-INSERT INTO travel_packages (id, destination, duration, description, starting_price, highlights, image_fallback_color, image_url, price_amount, currency)
+INSERT INTO travel_packages (id, destination, duration, description, starting_price, highlights, image_fallback_color, image_url, category, price_amount, currency)
 VALUES
-  ('pkg-1', 'Swiss Alps Explorer', '7 Days, 6 Nights', 'Experience the breathtaking beauty of the Swiss Alps with scenic train rides and cozy stays.', 'From INR 129,900 (Sample)', ARRAY['Scenic Train Rides', 'Mountain Tours', 'Breakfast Included'], 'bg-[var(--color-secondary-soft)]', 'https://images.unsplash.com/photo-1530789253388-582c481c54b0?w=1200&q=85', 129900, 'INR'),
-  ('pkg-2', 'Tropical Maldives', '5 Days, 4 Nights', 'Relax in overwater villas and enjoy the crystal-clear waters of the Indian Ocean.', 'From INR 89,900 (Sample)', ARRAY['Overwater Villa', 'Snorkeling', 'All-Inclusive'], 'bg-[var(--color-accent-soft)]', 'https://images.unsplash.com/photo-1514282401047-d79a71a590e8?w=1200&q=85', 89900, 'INR'),
-  ('pkg-3', 'Cultural Japan', '10 Days, 9 Nights', 'Discover the perfect blend of ancient traditions and modern technology in Japan.', 'From INR 189,900 (Sample)', ARRAY['Tokyo City Tour', 'Kyoto Temples', 'Bullet Train Pass'], 'bg-[var(--color-primary-soft)]', 'https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e?w=1200&q=85', 189900, 'INR')
+  ('pkg-1', 'Swiss Alps Explorer', '7 Days, 6 Nights', 'Experience the breathtaking beauty of the Swiss Alps with scenic train rides and cozy stays.', 'From INR 129,900 (Sample)', ARRAY['Scenic Train Rides', 'Mountain Tours', 'Breakfast Included'], 'bg-[var(--color-secondary-soft)]', 'https://images.unsplash.com/photo-1530789253388-582c481c54b0?w=1200&q=85', 'international', 129900, 'INR'),
+  ('pkg-2', 'Tropical Maldives', '5 Days, 4 Nights', 'Relax in overwater villas and enjoy the crystal-clear waters of the Indian Ocean.', 'From INR 89,900 (Sample)', ARRAY['Overwater Villa', 'Snorkeling', 'All-Inclusive'], 'bg-[var(--color-accent-soft)]', 'https://images.unsplash.com/photo-1514282401047-d79a71a590e8?w=1200&q=85', 'international', 89900, 'INR'),
+  ('pkg-3', 'Cultural Japan', '10 Days, 9 Nights', 'Discover the perfect blend of ancient traditions and modern technology in Japan.', 'From INR 189,900 (Sample)', ARRAY['Tokyo City Tour', 'Kyoto Temples', 'Bullet Train Pass'], 'bg-[var(--color-primary-soft)]', 'https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e?w=1200&q=85', 'international', 189900, 'INR'),
+  ('pkg-national-delhi', 'Delhi Heritage Trail', '3 Days, 2 Nights', 'Explore Mughal landmarks, lively markets, and the historic heart of India.', 'From INR 18,900', ARRAY['Red Fort', 'India Gate', 'Old Delhi Food Walk'], 'bg-[var(--color-secondary-soft)]', 'https://images.unsplash.com/photo-1587474260584-136574528ed5?w=1200&q=85', 'national', 18900, 'INR'),
+  ('pkg-national-punjab', 'Punjab Culture & Countryside', '4 Days, 3 Nights', 'Experience Punjabi hospitality, flavorful cuisine, and vibrant countryside traditions.', 'From INR 24,900', ARRAY['Golden Temple', 'Punjabi Cuisine', 'Village Experience'], 'bg-[var(--color-accent-soft)]', 'https://images.unsplash.com/photo-1609947017136-9daf32a5eb16?w=1200&q=85', 'national', 24900, 'INR'),
+  ('pkg-national-amritsar', 'Amritsar Spiritual Escape', '3 Days, 2 Nights', 'Discover Amritsar through its sacred landmarks, history, and unforgettable local flavors.', 'From INR 16,900', ARRAY['Golden Temple', 'Wagah Border', 'Jallianwala Bagh'], 'bg-[var(--color-primary-soft)]', 'https://images.unsplash.com/photo-1609947017136-9daf32a5eb16?w=1200&q=85', 'national', 16900, 'INR'),
+  ('pkg-national-goa', 'Goa Beach Getaway', '5 Days, 4 Nights', 'Unwind on Goa beaches with coastal food, heritage walks, and easy island time.', 'From INR 29,900', ARRAY['Beach Time', 'Old Goa Churches', 'Coastal Cuisine'], 'bg-[var(--color-accent-soft)]', 'https://images.unsplash.com/photo-1512343879784-a960bf40e7f2?w=1200&q=85', 'national', 29900, 'INR'),
+  ('pkg-national-kashmir', 'Kashmir Valley Escape', '6 Days, 5 Nights', 'Travel through serene valleys, mountain views, and the calm waters of Dal Lake.', 'From INR 39,900', ARRAY['Dal Lake', 'Gulmarg', 'Pahalgam'], 'bg-[var(--color-secondary-soft)]', 'https://images.unsplash.com/photo-1595815771614-ade9d652a65d?w=1200&q=85', 'national', 39900, 'INR'),
+  ('pkg-national-kerala', 'Kerala Backwaters & Hills', '6 Days, 5 Nights', 'Combine peaceful backwaters, lush hill country, and Kerala cultural experiences.', 'From INR 34,900', ARRAY['Houseboat Stay', 'Munnar Hills', 'Kerala Cuisine'], 'bg-[var(--color-primary-soft)]', 'https://images.unsplash.com/photo-1602216056096-3b40cc0c9944?w=1200&q=85', 'national', 34900, 'INR')
 ON CONFLICT (id) DO NOTHING;
 
 UPDATE travel_packages SET price_amount = 129900, currency = 'INR' WHERE id = 'pkg-1' AND price_amount = 0;

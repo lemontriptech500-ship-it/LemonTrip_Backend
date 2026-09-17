@@ -5,7 +5,8 @@ const packageFields = `
   starting_price AS "startingPrice",
   highlights,
   image_fallback_color AS "imageFallbackColor",
-  image_url AS "imageUrl"
+  image_url AS "imageUrl",
+  category
 `
 
 export async function search(request, response, next) {
@@ -13,10 +14,15 @@ export async function search(request, response, next) {
     const values = []
     const filters = []
     const destination = String(request.query.destination || '').trim()
+    const category = String(request.query.category || '').trim().toLowerCase()
 
     if (destination) {
       values.push(`%${destination}%`)
       filters.push(`destination ILIKE $${values.length}`)
+    }
+    if (category && ['national', 'international'].includes(category)) {
+      values.push(category)
+      filters.push(`category = $${values.length}`)
     }
 
     const where = filters.length ? `WHERE ${filters.join(' AND ')}` : ''
