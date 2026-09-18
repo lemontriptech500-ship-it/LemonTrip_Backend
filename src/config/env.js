@@ -93,6 +93,7 @@ export const env = {
   frontendUrls: [
     getEnv('FRONTEND_URL') || 'http://localhost:3000',
     getEnv('VERCEL_FRONTEND_URL') || 'https://lemon-trip-frontend-2563.vercel.app',
+    getEnv('ADMIN_FRONTEND_URL') || 'https://admin.lemontrip.in',
   ],
   awsRegion: getEnv('AWS_REGION') || 'eu-north-1',
   awsAccessKeyId: getEnv('AWS_ACCESS_KEY_ID'),
