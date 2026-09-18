@@ -117,6 +117,41 @@ Each active subscriber receives an individual email with a signed, expiring
 unsubscribe link. Unsubscribed records are retained and excluded from future
 send jobs.
 
+For a safe one-recipient Resend smoke test, configure a dedicated inbox—not an
+operator or customer address:
+
+```env
+NEWSLETTER_TEST_RECIPIENT=lemontrip-newsletter-test@example.com
+```
+
+`POST /api/v1/newsletter/send-test` requires the same admin bearer token and
+body as `/send`, but accepts no recipient field. It sends exactly one email to
+the environment-configured address, prefixes the subject with `[TEST]`, and
+returns its signed unsubscribe URL for the authenticated admin to verify. It
+never reads or sends to the active-subscriber list. The test recipient is
+reactivated so clicking that signed link can verify the unsubscribe database
+update; use a dedicated address because this changes that address's subscriber
+state.
+
+### Groq travel assistant setup
+
+The chat endpoint keeps its existing `POST /api/v1/chat` request and response
+shape. It uses Groq server-side and can call read-only tools for LemonTrip's
+flight, bus, and package inventory in PostgreSQL, plus configured Hotelbeds and
+IRCTC search services. It never sends credentials or user booking details to
+the model.
+
+```env
+GROQ_API_KEY=gsk_your_server_key
+# Optional; the default is openai/gpt-oss-20b on Groq.
+GROQ_MODEL=openai/gpt-oss-20b
+```
+
+`GROQ_API_KEY` must stay in the backend environment only—do not use a
+`NEXT_PUBLIC_` variable. When a supplier is not configured, is in mock/test
+mode, or cannot return a result, the assistant says that availability is not
+verified instead of making up inventory, prices, or booking details.
+
 ## Testing
 
 ```bash

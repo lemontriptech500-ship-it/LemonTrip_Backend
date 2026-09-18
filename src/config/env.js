@@ -37,9 +37,11 @@ export const env = {
   googleClientId: configuredGoogleClientId.startsWith('replace-with-') ? '' : configuredGoogleClientId,
   razorpayKeyId: getEnv('RAZORPAY_KEY_ID'),
   razorpayKeySecret: getEnv('RAZORPAY_KEY_SECRET'),
-  aiApiKey: getEnv('AI_API_KEY'),
-  aiBaseUrl: getEnv('AI_BASE_URL') || 'https://api.openai.com/v1',
-  aiModel: getEnv('AI_MODEL') || 'gpt-4o-mini',
+  // Keep AI credentials server-side. The chat service intentionally uses only
+  // these Groq settings; legacy AI_/OPENAI_ variables are not read.
+  groqApiKey: getEnv('GROQ_API_KEY'),
+  groqBaseUrl: getEnv('GROQ_BASE_URL') || 'https://api.groq.com/openai/v1',
+  groqModel: getEnv('GROQ_MODEL') || 'openai/gpt-oss-20b',
   aiTimeoutMs: Number(getEnv('AI_TIMEOUT_MS') || 45000),
   hotelbedsApiKey: getEnv('HOTELBEDS_API_KEY'),
   hotelbedsApiSecret: getEnv('HOTELBEDS_API_SECRET'),
@@ -77,6 +79,7 @@ export const env = {
   },
   resendApiKey: getEnv('RESEND_API_KEY'),
   newsletterFromEmail: getEnv('NEWSLETTER_FROM_EMAIL') || 'LemonTrip <onboarding@resend.dev>',
+  newsletterTestRecipient: getEnv('NEWSLETTER_TEST_RECIPIENT').trim().toLowerCase(),
   adminEmails: configuredAdminEmails.split(',').map((email) => email.trim().toLowerCase()).filter(Boolean),
   smtpHost: getEnv('SMTP_HOST'),
   smtpPort: Number(getEnv('SMTP_PORT') || 587),

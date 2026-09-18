@@ -85,6 +85,61 @@ test('POST /newsletter/send rejects unauthorized administrators', async () => {
   assert.equal(res.status, 403)
 })
 
+test('POST /newsletter/send-test sends only to the configured recipient with a signed unsubscribe link', async (t) => {
+  const originalRecipient = env.newsletterTestRecipient
+  env.newsletterTestRecipient = 'newsletter-test@example.com'
+  t.after(() => { env.newsletterTestRecipient = originalRecipient; setNewsletterEmailSender() })
+  const sent = []
+  t.mock.method(pool, 'query', async () => ({ rows: [{ id: 'test-subscriber-1', email: 'newsletter-test@example.com' }] }))
+  setNewsletterEmailSender(async (message) => { sent.push(message); return { id: 'resend-test-1' } })
+
+  const res = await request(app)
+    .post(`${API}/send-test`)
+    .set('Authorization', `Bearer ${adminToken()}`)
+    .send({ subject: 'Newsletter smoke test', content: '<p>Test content.</p>', recipient: 'ignored@example.com' })
+
+  assert.equal(res.status, 200)
+  assert.deepEqual(res.body.data, {
+    message: 'Test newsletter sent to the configured test recipient.',
+    sent: 1,
+    total: 1,
+    recipient: 'newsletter-test@example.com',
+    emailId: 'resend-test-1',
+    unsubscribeLink: res.body.data.unsubscribeLink,
+  })
+  assert.match(res.body.data.unsubscribeLink, /\/api\/v1\/newsletter\/unsubscribe\?token=/)
+  assert.equal(sent.length, 1)
+  assert.equal(sent[0].to, 'newsletter-test@example.com')
+  assert.equal(sent[0].subject, '[TEST] Newsletter smoke test')
+  assert.match(sent[0].html, /Test content/)
+  assert.match(sent[0].html, /Unsubscribe from these emails/)
+})
+
+test('POST /newsletter/send-test requires an admin and cannot be aimed at another address', async (t) => {
+  const sent = []
+  setNewsletterEmailSender(async (message) => { sent.push(message); return { id: 'unexpected' } })
+  t.after(() => setNewsletterEmailSender())
+  const token = jwt.sign({ id: 'user-1', email: 'traveler@example.com' }, env.jwtSecret, { expiresIn: '7d' })
+  const res = await request(app)
+    .post(`${API}/send-test`)
+    .set('Authorization', `Bearer ${token}`)
+    .send({ subject: 'No access', content: '<p>No access</p>', recipient: 'another@example.com' })
+  assert.equal(res.status, 403)
+  assert.equal(sent.length, 0)
+})
+
+test('POST /newsletter/send-test reports missing dedicated test-recipient configuration', async (t) => {
+  const originalRecipient = env.newsletterTestRecipient
+  env.newsletterTestRecipient = ''
+  t.after(() => { env.newsletterTestRecipient = originalRecipient })
+  const res = await request(app)
+    .post(`${API}/send-test`)
+    .set('Authorization', `Bearer ${adminToken()}`)
+    .send({ subject: 'Newsletter smoke test', content: '<p>Test content.</p>' })
+  assert.equal(res.status, 503)
+  assert.deepEqual(res.body, { success: false, error: { message: 'Newsletter test sending is not configured. Set NEWSLETTER_TEST_RECIPIENT to a dedicated test inbox.' } })
+})
+
 test('GET /newsletter/unsubscribe deactivates the subscriber from a signed link', async (t) => {
   let query
   t.mock.method(pool, 'query', async (sql, values) => {

@@ -1,6 +1,7 @@
 import { pool } from '../config/db.js'
 import { sendEmail } from './emailService.js'
 import { renderNewsletter, unsubscribeUrl } from './newsletterTemplate.js'
+import { env } from '../config/env.js'
 
 let emailSender = sendEmail
 
@@ -23,4 +24,33 @@ export async function sendNewsletter({ subject, content }) {
     throw error
   }
   return { sent, total: outcomes.length }
+}
+
+export async function sendTestNewsletter({ subject, content }) {
+  const email = env.newsletterTestRecipient
+  if (!email) {
+    const error = new Error('Newsletter test sending is not configured. Set NEWSLETTER_TEST_RECIPIENT to a dedicated test inbox.')
+    error.status = 503
+    throw error
+  }
+
+  // This address is intentionally environment-owned: callers can never supply
+  // a recipient, so this path cannot turn into a broadcast or arbitrary mailer.
+  const subscriber = await pool.query(`
+    INSERT INTO newsletter_subscribers (email, source, active, subscribed_at, unsubscribed_at)
+    VALUES ($1, 'newsletter-test', TRUE, NOW(), NULL)
+    ON CONFLICT (email) DO UPDATE SET
+      active = TRUE,
+      unsubscribed_at = NULL
+    RETURNING id, email
+  `, [email])
+  const recipient = subscriber.rows[0]
+  const unsubscribeLink = unsubscribeUrl(recipient.id)
+  const result = await emailSender({
+    to: recipient.email,
+    subject: `[TEST] ${subject}`,
+    html: renderNewsletter({ content, unsubscribeLink }),
+  })
+
+  return { sent: 1, total: 1, recipient: recipient.email, emailId: result?.id || null, unsubscribeLink }
 }

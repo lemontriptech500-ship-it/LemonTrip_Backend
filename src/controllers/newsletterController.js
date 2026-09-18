@@ -1,7 +1,7 @@
 import { pool } from '../config/db.js'
 import jwt from 'jsonwebtoken'
 import { env } from '../config/env.js'
-import { sendNewsletter } from '../services/newsletterService.js'
+import { sendNewsletter, sendTestNewsletter } from '../services/newsletterService.js'
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -82,6 +82,20 @@ export async function send(request, response, next) {
     }
     const result = await sendNewsletter({ subject, content })
     return response.json({ success: true, data: { message: `Newsletter sent to ${result.sent} active subscriber(s).`, ...result } })
+  } catch (error) {
+    return next(error)
+  }
+}
+
+export async function sendTest(request, response, next) {
+  try {
+    const subject = typeof request.body?.subject === 'string' ? request.body.subject.trim() : ''
+    const content = typeof request.body?.content === 'string' ? request.body.content.trim() : ''
+    if (!subject || subject.length > 200 || !content || content.length > 100_000) {
+      return response.status(400).json({ success: false, error: { message: 'Subject and newsletter content are required. Subject must be 200 characters or fewer.' } })
+    }
+    const result = await sendTestNewsletter({ subject, content })
+    return response.json({ success: true, data: { message: 'Test newsletter sent to the configured test recipient.', ...result } })
   } catch (error) {
     return next(error)
   }
