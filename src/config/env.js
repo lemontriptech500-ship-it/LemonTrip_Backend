@@ -20,6 +20,7 @@ const requiredInProduction = [
 ]
 const configuredGoogleClientId = getEnv('GOOGLE_CLIENT_ID')
 const configuredAdminEmails = getEnv('ADMIN_EMAILS')
+const configuredAdminPanelEmails = getEnv('ADMIN_EMAILS_LOGIN')
 
 if (getEnv('NODE_ENV') === 'production') {
   const missing = requiredInProduction.filter((key) => !getEnv(key))
@@ -81,6 +82,7 @@ export const env = {
   newsletterFromEmail: getEnv('NEWSLETTER_FROM_EMAIL') || 'LemonTrip <onboarding@resend.dev>',
   newsletterTestRecipient: getEnv('NEWSLETTER_TEST_RECIPIENT').trim().toLowerCase(),
   adminEmails: configuredAdminEmails.split(',').map((email) => email.trim().toLowerCase()).filter(Boolean),
+  adminPanelEmails: configuredAdminPanelEmails.split(',').map((email) => email.trim().toLowerCase()).filter(Boolean),
   smtpHost: getEnv('SMTP_HOST'),
   smtpPort: Number(getEnv('SMTP_PORT') || 587),
   smtpSecure: getEnv('SMTP_SECURE') === 'true',
