@@ -20,7 +20,7 @@ export function requireAuth(request, response, next) {
 }
 
 export function requireAdmin(request, response, next) {
-  if (!env.adminEmails.includes(String(request.user?.email || '').toLowerCase())) {
+  if (!env.adminPanelEmails.includes(String(request.user?.email || '').toLowerCase())) {
     return response.status(403).json({ success: false, error: { message: 'Administrator access required' } })
   }
   return next()
