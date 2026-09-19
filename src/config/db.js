@@ -56,6 +56,8 @@ export async function connectDatabase() {
       )
     `)
     await client.query('CREATE INDEX IF NOT EXISTS idx_contact_messages_created_at ON contact_messages (created_at DESC)')
+    await client.query('ALTER TABLE travel_packages ADD COLUMN IF NOT EXISTS price_amount NUMERIC(12, 2) NOT NULL DEFAULT 0')
+    await client.query("ALTER TABLE travel_packages ADD COLUMN IF NOT EXISTS currency CHAR(3) NOT NULL DEFAULT 'INR'")
     await client.query("ALTER TABLE travel_packages ADD COLUMN IF NOT EXISTS category VARCHAR(20) NOT NULL DEFAULT 'international'")
     await client.query("UPDATE travel_packages SET category = 'international' WHERE category IS NULL OR category NOT IN ('national', 'international')")
     await client.query(`
