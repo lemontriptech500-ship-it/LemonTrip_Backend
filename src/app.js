@@ -16,6 +16,7 @@ import couponRoutes from './routes/couponRoutes.js'
 import chatRoutes from './routes/chatRoutes.js'
 import newsletterRoutes from './routes/newsletterRoutes.js'
 import contactRoutes from './routes/contactRoutes.js'
+import adminPackageRoutes from './routes/adminPackageRoutes.js'
 import { notFoundHandler, errorHandler } from './middlewares/errorHandler.js'
 import adminRoutes from './routes/adminRoutes.js'
 
@@ -51,6 +52,7 @@ app.use('/api/v1/chat', chatRoutes)
 app.use('/api/v1/newsletter', newsletterRoutes)
 app.use('/api/v1/contact', contactRoutes)
 app.use('/api/v1/admin', adminRoutes)
+app.use('/api/v1/admin/packages', adminPackageRoutes)
 
 app.use(notFoundHandler)
 app.use(errorHandler)

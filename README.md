@@ -110,6 +110,7 @@ RESEND_API_KEY=re_your_server_key
 NEWSLETTER_FROM_EMAIL=LemonTrip <news@your-verified-domain.com>
 NEWSLETTER_UNSUBSCRIBE_BASE_URL=https://api.example.com/api/v1/newsletter
 ADMIN_EMAILS=admin@example.com
+ADMIN_FRONTEND_URL=https://your-admin.vercel.app
 ```
 
 The admin endpoint accepts `{ "subject": "...", "content": "<p>...</p>" }`.
