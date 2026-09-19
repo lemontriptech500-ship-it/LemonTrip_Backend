@@ -67,7 +67,7 @@ export async function createPackage(request, response, next) {
     const id = `pkg-${slug(payload.destination)}-${Date.now().toString(36)}`
     const result = await pool.query(`
       INSERT INTO travel_packages (id, destination, duration, description, starting_price, highlights, image_fallback_color, image_url, category, price_amount, currency)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
       RETURNING ${packageFields}
     `, [id, payload.destination, payload.duration, payload.description, payload.startingPrice, payload.highlights, payload.imageFallbackColor, payload.imageUrl, payload.category, payload.priceAmount, payload.currency])
     return response.status(201).json({ success: true, data: result.rows[0] })
