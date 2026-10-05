@@ -14,7 +14,7 @@ async function seed() {
     await pool.query(
       `INSERT INTO visa_services (id, country, visa_type, processing_time, starting_from, image_url, documents)
        VALUES ($1,$2,$3,$4,$5,$6,$7)
-       ON CONFLICT (id) DO UPDATE SET starting_from = EXCLUDED.starting_from`,
+       ON CONFLICT (id) DO NOTHING`,
       [s.id, s.country, s.visaType, s.processingTime, s.startingFrom, s.imageUrl, s.documents],
     )
   }

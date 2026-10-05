@@ -19,8 +19,8 @@ const requiredInProduction = [
   'AWS_S3_BUCKET',
 ]
 const configuredGoogleClientId = getEnv('GOOGLE_CLIENT_ID')
-const configuredAdminEmails = getEnv('ADMIN_EMAILS')
-const configuredAdminPanelEmails = getEnv('ADMIN_EMAILS_LOGIN')
+const configuredAdminEmails = getEnv('ADMIN_EMAILS') || getEnv('ADMIN_EMAILS_LOGIN') || ''
+const configuredAdminPanelEmails = getEnv('ADMIN_EMAILS_LOGIN') || getEnv('ADMIN_EMAILS') || ''
 
 if (getEnv('NODE_ENV') === 'production') {
   const missing = requiredInProduction.filter((key) => !getEnv(key))

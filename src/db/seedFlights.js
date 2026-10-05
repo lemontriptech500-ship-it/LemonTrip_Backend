@@ -72,10 +72,7 @@ async function seed() {
         stops, stop_locations, travel_class, refundable, baggage_allowance,
         segments, fare_options
       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
-      ON CONFLICT (id) DO UPDATE SET
-        departure_time = EXCLUDED.departure_time,
-        arrival_time = EXCLUDED.arrival_time,
-        departure_date = EXCLUDED.departure_date`,
+      ON CONFLICT (id) DO NOTHING`,
       [
         f.id, f.origin, f.destination, departureDate, departureTime.toISOString(), arrivalTime.toISOString(),
         f.price, 'INR', f.airline, f.airlineCode, f.flightNumber, f.duration,

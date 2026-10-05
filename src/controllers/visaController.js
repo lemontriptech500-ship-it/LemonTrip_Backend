@@ -102,8 +102,8 @@ export async function trackApplication(request, response, next) {
               TO_CHAR(a.submitted_at, 'YYYY-MM-DD') AS "submittedDate"
        FROM visa_applications a
        JOIN visa_services s ON s.id = a.service_id
-       WHERE a.id = $1`,
-      [request.params.applicationId],
+       WHERE a.id = $1 AND a.user_id = $2`,
+      [request.params.applicationId, request.user.id],
     )
     if (!result.rows[0]) return response.status(404).json({ success: false, error: { message: 'Application not found' } })
 
@@ -116,21 +116,55 @@ export async function trackApplication(request, response, next) {
   }
 }
 
+export async function listApplications(request, response, next) {
+  try {
+    const limit = Math.min(100, Math.max(1, Number.parseInt(request.query.limit, 10) || 50))
+    const offset = Math.max(0, Number.parseInt(request.query.offset, 10) || 0)
+    const [items, count] = await Promise.all([
+      pool.query(
+        `SELECT a.id, s.country, s.visa_type AS "visaType", a.status,
+                a.submitted_at AS "submittedAt", a.passport_front_path,
+                a.passport_back_path, a.photograph_path
+         FROM visa_applications a JOIN visa_services s ON s.id = a.service_id
+         WHERE a.user_id = $1 ORDER BY a.submitted_at DESC LIMIT $2 OFFSET $3`,
+        [request.user.id, limit, offset],
+      ),
+      pool.query('SELECT count(*)::int AS total FROM visa_applications WHERE user_id = $1', [request.user.id]),
+    ])
+    const total = count.rows[0]?.total ?? 0
+    return response.json({
+      items: items.rows.map((row) => ({
+        id: row.id, referenceId: row.id, country: row.country, visaType: row.visaType,
+        status: row.status, createdAt: new Date(row.submittedAt).toISOString(),
+        documents: {
+          passportFront: Boolean(row.passport_front_path),
+          passportBack: Boolean(row.passport_back_path),
+          applicantPhoto: Boolean(row.photograph_path),
+        },
+      })),
+      pagination: { total, hasMore: offset + items.rows.length < total },
+    })
+  } catch (error) {
+    return next(error)
+  }
+}
+
 /**
  * Returns a short-lived signed URL (5 min) to view a private visa document.
  * documentType must be one of: passport_front | passport_back | photograph
  */
 export async function getApplicationDocument(request, response, next) {
   try {
-    const { applicationId, documentType } = request.params
-    const allowedTypes = ['passport_front', 'passport_back', 'photograph']
-    if (!allowedTypes.includes(documentType)) {
+    const { applicationId } = request.params
+    const documentMap = { passportFront: 'passport_front', passportBack: 'passport_back', applicantPhoto: 'photograph', passport_front: 'passport_front', passport_back: 'passport_back', photograph: 'photograph' }
+    const column = documentMap[request.params.documentType]
+    if (!column) {
       return response.status(400).json({ success: false, error: { message: 'Invalid document type' } })
     }
 
     const result = await pool.query(
-      'SELECT passport_front_path, passport_back_path, photograph_path FROM visa_applications WHERE id = $1',
-      [applicationId],
+      'SELECT passport_front_path, passport_back_path, photograph_path FROM visa_applications WHERE id = $1 AND user_id = $2',
+      [applicationId, request.user.id],
     )
     const row = result.rows[0]
     if (!row) return response.status(404).json({ success: false, error: { message: 'Application not found' } })
@@ -140,7 +174,7 @@ export async function getApplicationDocument(request, response, next) {
       passport_back: row.passport_back_path,
       photograph: row.photograph_path,
     }
-    const fileUrl = columnMap[documentType]
+    const fileUrl = columnMap[column]
     if (!fileUrl) return response.status(404).json({ success: false, error: { message: 'Document not found' } })
 
     // Extract the S3 object key from the stored full URL
@@ -149,7 +183,8 @@ export async function getApplicationDocument(request, response, next) {
     const command = new GetObjectCommand({ Bucket: env.awsS3Bucket, Key: key })
     const url = await getSignedUrl(s3Client, command, { expiresIn: 300 })
 
-    return response.json({ success: true, data: { url } })
+    // Keep the legacy website envelope and expose the flat mobile contract too.
+    return response.json({ success: true, data: { url, expiresIn: 300 }, url, expiresIn: 300 })
   } catch (error) {
     return next(error)
   }

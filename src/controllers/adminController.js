@@ -257,7 +257,8 @@ const adminPostFields = `
   image_fallback_color AS "imageFallbackColor",
   image_url AS "imageUrl",
   TO_CHAR(published_at, 'YYYY-MM-DD') AS "publishedAt",
-  read_time AS "readTime"
+  read_time AS "readTime",
+  publication_status AS "publicationStatus"
 `
 
 export async function listBlogPostsAdmin(_request, response, next) {
@@ -275,16 +276,19 @@ function slugify(title) {
 
 export async function createBlogPost(request, response, next) {
   try {
-    const { category, title, excerpt, content, imageFallbackColor = 'bg-[var(--color-primary-soft)]', imageUrl = null, publishedAt, readTime = '5 min read' } = request.body
+    const { category, title, excerpt, content, imageFallbackColor = 'bg-[var(--color-primary-soft)]', imageUrl = null, publishedAt, readTime = '5 min read', publicationStatus = 'published' } = request.body
     if (!category || !title || !excerpt || !content || !publishedAt) {
       return response.status(400).json({ success: false, error: { message: 'category, title, excerpt, content and publishedAt are required' } })
     }
+    if (!['draft', 'published'].includes(publicationStatus)) {
+      return response.status(400).json({ success: false, error: { message: 'publicationStatus must be draft or published' } })
+    }
     const id = `blog-${slugify(title)}-${Date.now().toString(36)}`
     const result = await pool.query(
-      `INSERT INTO blog_posts (id, category, title, excerpt, content, image_fallback_color, image_url, published_at, read_time)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+      `INSERT INTO blog_posts (id, category, title, excerpt, content, image_fallback_color, image_url, published_at, read_time, publication_status)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
        RETURNING ${adminPostFields}`,
-      [id, category, title, excerpt, content, imageFallbackColor, imageUrl, publishedAt, readTime],
+      [id, category, title, excerpt, content, imageFallbackColor, imageUrl, publishedAt, readTime, publicationStatus],
     )
     return response.status(201).json({ success: true, data: result.rows[0] })
   } catch (error) {
@@ -294,7 +298,7 @@ export async function createBlogPost(request, response, next) {
 
 export async function updateBlogPost(request, response, next) {
   try {
-    const fields = { category: 'category', title: 'title', excerpt: 'excerpt', content: 'content', image_fallback_color: 'imageFallbackColor', image_url: 'imageUrl', published_at: 'publishedAt', read_time: 'readTime' }
+    const fields = { category: 'category', title: 'title', excerpt: 'excerpt', content: 'content', image_fallback_color: 'imageFallbackColor', image_url: 'imageUrl', published_at: 'publishedAt', read_time: 'readTime', publication_status: 'publicationStatus' }
     const sets = []
     const values = []
     for (const [column, key] of Object.entries(fields)) {
@@ -304,6 +308,9 @@ export async function updateBlogPost(request, response, next) {
       }
     }
     if (!sets.length) return response.status(400).json({ success: false, error: { message: 'No fields to update' } })
+    if (request.body.publicationStatus !== undefined && !['draft', 'published'].includes(request.body.publicationStatus)) {
+      return response.status(400).json({ success: false, error: { message: 'publicationStatus must be draft or published' } })
+    }
     values.push(request.params.postId)
     const result = await pool.query(
       `UPDATE blog_posts SET ${sets.join(', ')} WHERE id = $${values.length} RETURNING ${adminPostFields}`,
@@ -453,18 +460,9 @@ export async function updateContactMessageStatus(request, response, next) {
     if (!allowed.includes(status)) {
       return response.status(400).json({ success: false, error: { message: `status must be one of: ${allowed.join(', ')}` } })
     }
-    // 'resolved' is an admin-only status not in the original DB check constraint;
-    // store it as email_sent if the constraint rejects it, otherwise store as-is.
-    try {
-      const result = await pool.query('UPDATE contact_messages SET status = $1 WHERE id = $2 RETURNING id, status', [status, request.params.messageId])
-      if (!result.rows[0]) return response.status(404).json({ success: false, error: { message: 'Message not found' } })
-      return response.json({ success: true, data: result.rows[0] })
-    } catch (error) {
-      if (error.code === '23514') {
-        return response.status(400).json({ success: false, error: { message: "This backend's contact_messages status column does not yet allow 'resolved'. Run: ALTER TABLE contact_messages DROP CONSTRAINT contact_messages_status_check, then re-add it including 'resolved'." } })
-      }
-      throw error
-    }
+    const result = await pool.query('UPDATE contact_messages SET status = $1 WHERE id = $2 RETURNING id, status', [status, request.params.messageId])
+    if (!result.rows[0]) return response.status(404).json({ success: false, error: { message: 'Message not found' } })
+    return response.json({ success: true, data: result.rows[0] })
   } catch (error) {
     return next(error)
   }
