@@ -5,13 +5,14 @@ const postFields = `
   image_fallback_color AS "imageFallbackColor",
   image_url AS "imageUrl",
   TO_CHAR(published_at, 'Mon DD, YYYY') AS date,
+  TO_CHAR(updated_at, 'Mon DD, YYYY') AS "updatedAt",
   read_time AS "readTime",
   publication_status AS "publicationStatus"
 `
 
 export async function listPosts(_request, response, next) {
   try {
-    const result = await pool.query(`SELECT ${postFields} FROM blog_posts WHERE publication_status = 'published' ORDER BY published_at DESC`)
+    const result = await pool.query(`SELECT ${postFields} FROM blog_posts WHERE publication_status = 'published' ORDER BY updated_at DESC, published_at DESC, id DESC`)
     return response.json({ success: true, data: { posts: result.rows, total: result.rowCount } })
   } catch (error) {
     return next(error)
