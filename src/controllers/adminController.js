@@ -257,6 +257,7 @@ const adminPostFields = `
   image_fallback_color AS "imageFallbackColor",
   image_url AS "imageUrl",
   TO_CHAR(published_at, 'YYYY-MM-DD') AS "publishedAt",
+  TO_CHAR(updated_at, 'YYYY-MM-DD') AS "updatedAt",
   read_time AS "readTime",
   publication_status AS "publicationStatus"
 `
