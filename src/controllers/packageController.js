@@ -6,7 +6,21 @@ const packageFields = `
   highlights,
   image_fallback_color AS "imageFallbackColor",
   image_url AS "imageUrl",
-  category
+  category,
+  short_description AS "shortDescription",
+  location,
+  best_for AS "bestFor",
+  itinerary,
+  inclusions,
+  exclusions,
+  accommodation_details AS "accommodationDetails",
+  meal_plan AS "mealPlan",
+  transport_details AS "transportDetails",
+  notes,
+  gallery,
+  available_dates AS "availableDates",
+  cancellation_policy AS "cancellationPolicy",
+  terms_and_conditions AS "termsAndConditions"
 `
 
 export async function search(request, response, next) {

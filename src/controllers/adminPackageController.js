@@ -8,7 +8,21 @@ const packageFields = `
   image_url AS "imageUrl",
   category,
   price_amount AS "priceAmount",
-  currency
+  currency,
+  short_description AS "shortDescription",
+  location,
+  best_for AS "bestFor",
+  itinerary,
+  inclusions,
+  exclusions,
+  accommodation_details AS "accommodationDetails",
+  meal_plan AS "mealPlan",
+  transport_details AS "transportDetails",
+  notes,
+  gallery,
+  available_dates AS "availableDates",
+  cancellation_policy AS "cancellationPolicy",
+  terms_and_conditions AS "termsAndConditions"
 `
 
 function text(value, max) {
