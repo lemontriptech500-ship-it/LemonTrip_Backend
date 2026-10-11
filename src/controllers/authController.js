@@ -88,13 +88,22 @@ export async function googleAuth(request, response, next) {
           googleId: profile.googleId,
           avatar: profile.avatar,
         })
-      } else {
-        // 3. First Google authentication: create the account for either auth mode.
+      } else if (mode === 'signup') {
+        // 3. Explicit sign-up with an unknown Google identity: create the account.
         user = await createGoogleUser({
           name: profile.name,
           email: profile.email,
           googleId: profile.googleId,
           avatar: profile.avatar,
+        })
+      } else {
+        // 4. Sign-in with an unknown Google identity: never auto-create.
+        return response.status(404).json({
+          success: false,
+          error: {
+            code: 'ACCOUNT_NOT_FOUND',
+            message: 'No account found for this Google account. Please create an account first, then sign in.',
+          },
         })
       }
     }
