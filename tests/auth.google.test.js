@@ -14,7 +14,7 @@ const profile = {
   avatar: 'https://lh3.googleusercontent.com/a/avatar.jpg',
 }
 
-test('POST /auth/google creates a brand-new user on first Google authentication', async (t) => {
+test('POST /auth/google creates a brand-new user on Google sign-up', async (t) => {
   t.mock.method(googleAuthService, 'verifyIdToken', async () => profile)
   t.mock.method(pool, 'query', async (sql) => {
     if (sql.includes('google_id = $1')) return { rows: [] } // findUserByGoogleId -> none yet
@@ -24,7 +24,7 @@ test('POST /auth/google creates a brand-new user on first Google authentication'
     } // createGoogleUser
   })
 
-  const res = await request(app).post(`${API}/google`).send({ idToken: 'valid-google-id-token', mode: 'signin' })
+  const res = await request(app).post(`${API}/google`).send({ idToken: 'valid-google-id-token', mode: 'signup' })
 
   assert.equal(res.status, 200)
   assert.equal(res.body.success, true)
@@ -73,18 +73,21 @@ test('POST /auth/google links Google to an existing local account with the same 
   assert.equal(linkCalled, true)
 })
 
-test('POST /auth/google creates an account for an unknown Google identity during sign-in', async (t) => {
+test('POST /auth/google does NOT create an account for an unknown Google identity during sign-in', async (t) => {
   t.mock.method(googleAuthService, 'verifyIdToken', async () => profile)
+  let insertCalled = false
   t.mock.method(pool, 'query', async (sql) => {
-    if (sql.includes('google_id = $1') || sql.includes('email = $1')) return { rows: [] }
-    return { rows: [{ id: 'user-new', name: profile.name, email: profile.email, phone: null, avatar: profile.avatar, provider: 'google' }] }
+    if (sql.includes('INSERT')) insertCalled = true
+    return { rows: [] }
   })
 
   const res = await request(app).post(`${API}/google`).send({ idToken: 'valid-google-id-token', mode: 'signin' })
 
-  assert.equal(res.status, 200)
-  assert.equal(res.body.success, true)
-  assert.equal(res.body.data.user.provider, 'google')
+  assert.equal(res.status, 404)
+  assert.equal(res.body.success, false)
+  assert.equal(res.body.error.code, 'ACCOUNT_NOT_FOUND')
+  assert.match(res.body.error.message, /create an account first/i)
+  assert.equal(insertCalled, false)
 })
 
 test('POST /auth/google rejects an invalid/expired Google token with 401', async (t) => {
