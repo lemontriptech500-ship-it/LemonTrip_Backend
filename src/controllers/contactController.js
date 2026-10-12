@@ -58,6 +58,20 @@ async function deliverContactEmail(data) {
   const html = buildContactHtml(data)
   const errors = []
 
+  const smtpConfigured = Boolean(env.smtpHost && env.smtpUser && env.smtpPassword && env.contactFromEmail)
+  if (smtpConfigured) {
+    try {
+      await sendContactEmail(data)
+      return { provider: 'smtp' }
+    } catch (error) {
+      errors.push({ provider: 'smtp', message: error.message })
+      const combinedError = new Error('SMTP failed to deliver the contact email.')
+      combinedError.status = 502
+      combinedError.details = errors
+      throw combinedError
+    }
+  }
+
   if (env.resendApiKey) {
     try {
       await sendEmail({
@@ -71,16 +85,10 @@ async function deliverContactEmail(data) {
     }
   }
 
-  try {
-    await sendContactEmail(data)
-    return { provider: 'smtp' }
-  } catch (error) {
-    errors.push({ provider: 'smtp', message: error.message })
-    const combinedError = new Error('Both Resend and SMTP failed to deliver the contact email.')
-    combinedError.status = 502
-    combinedError.details = errors
-    throw combinedError
-  }
+  const combinedError = new Error('Both Resend and SMTP failed to deliver the contact email.')
+  combinedError.status = 502
+  combinedError.details = errors
+  throw combinedError
 }
 
 export async function submitContact(request, response, next) {

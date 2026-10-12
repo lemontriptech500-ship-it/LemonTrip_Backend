@@ -11,15 +11,60 @@ Beginner-friendly Express API for the LemonTrip OTA platform.
 npm install
 ```
 
-3. Create the starter database tables using `db/schema.sql` (safe to re-run — it
-   `ALTER`s existing tables to add the Google auth columns if they're missing).
-4. Start the development server:
+3. Apply the legacy bootstrap to the **new, empty development database** so
+   the API's users and booking dependencies exist:
+
+```bash
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f db/schema.sql
+```
+
+This older SQL file is the non-catalog schema bootstrap. It does not insert
+sample rows and is intended for an empty development database, not for replay
+against a populated database.
+
+4. Apply the versioned catalog migrations:
+
+```bash
+npm run db:migrate -- --allow-existing-schema-reviewed
+```
+
+This creates the backend-specific `lemontrip_website_schema_migrations` ledger
+and applies ordered SQL files in `db/migrations/`. It uses the same PostgreSQL
+advisory lock as the mobile backend but keeps its migration history separate.
+Previously recorded website migration filenames in the former shared
+`schema_migrations` table are copied into the namespaced ledger so they are not
+replayed. The explicit flag is needed after the legacy bootstrap has created
+base tables. It allows unapplied SQL to run; it does not create a baseline.
+Existing databases (including production) need a separate review, backup, and
+explicit operator approval before using it. No production baseline is created
+automatically.
+
+The visa catalog table was absent from the checked-in SQL schema. Its
+migration preserves the columns used by the API and existing seed script;
+`documents` is stored as `TEXT[]`, matching the seed's string-array values.
+Migration `003_visa_applications.sql` creates the application table and its
+service/user foreign keys, status constraint, and lookup indexes.
+
+5. Optionally add sample inventory in development or staging:
+
+```bash
+npm run db:seed:development
+```
+
+Seed rows for blogs, packages, visas, coupons, buses, trains, and hotels use
+`ON CONFLICT DO NOTHING`, so rerunning the command does not overwrite records
+that already exist. Migrations and `db/schema.sql` create schema only; sample
+data is a separate opt-in action. Optional date-relative flight samples can
+be added with `npm run db:seed:flights`; existing flight IDs are preserved.
+
+6. Start the development server:
 
 ```bash
 npm run dev
 ```
 
-The API runs at `http://localhost:5000` by default.
+The API runs at `http://localhost:5000` by default. API startup only checks
+PostgreSQL connectivity; it no longer changes schemas or inserts catalog rows.
 
 ## Google Sign-In setup
 
@@ -171,9 +216,12 @@ Covered in `tests/`:
 - `auth.me.test.js` — valid token, missing header, invalid token, valid token for a deleted user
 - `health.test.js` — health check and 404 handling
 
-> **Note:** this was built in a sandboxed environment without internet or
-> database access, so `npm install` / `npm test` couldn't actually be run
-> here. Every file was syntax-checked (`node --check`) and the tests were
-> written to cover each success/error branch — please run
-> `npm install && npm test` locally before merging, and ping me if anything
-> needs fixing.
+Migration runner tests use a mocked database client to verify blank-database
+application, repeat runs, and refusal to baseline pre-existing catalog tables.
+The blog, package, and visa endpoint tests mock queries and verify the existing
+response shape without requiring a database. To verify actual PostgreSQL DDL
+on a fresh development database, run `npm run db:migrate` twice, then
+`npm run db:seed:development` twice and request `GET /api/v1/blog`,
+`GET /api/v1/packages/search`, and `GET /api/v1/visa/services` against the
+local API. Confirm counts remain stable after the second seed and edit one
+sample row before reseeding to confirm the edit remains unchanged.
