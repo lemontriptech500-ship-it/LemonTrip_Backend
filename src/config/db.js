@@ -22,6 +22,14 @@ export async function connectDatabase() {
   const client = await pool.connect()
   try {
     await client.query('SELECT 1')
+    await client.query(`CREATE TABLE IF NOT EXISTS password_reset_tokens (
+      user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      token_hash TEXT PRIMARY KEY,
+      expires_at TIMESTAMPTZ NOT NULL,
+      used_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`)
+    await client.query('CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_user ON password_reset_tokens (user_id)')
     await client.query(`
       CREATE TABLE IF NOT EXISTS chat_conversations (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

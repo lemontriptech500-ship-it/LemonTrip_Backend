@@ -1,4 +1,7 @@
 import bcrypt from 'bcryptjs'
+import crypto from 'node:crypto'
+import { pool } from '../config/db.js'
+import { sendEmail } from '../services/emailService.js'
 import jwt from 'jsonwebtoken'
 import { env } from '../config/env.js'
 import {
@@ -75,37 +78,22 @@ export async function googleAuth(request, response, next) {
 
     const profile = await googleAuthService.verifyIdToken(idToken)
 
-    // 1. Already signed up with Google before -> log straight in
-    let user = await findUserByGoogleId(profile.googleId)
-
-    if (!user) {
-      // 2. An account with this email already exists (registered with a
-      //    password) -> link Google to it instead of creating a duplicate
-      const existingByEmail = await findUserByEmail(profile.email)
-      if (existingByEmail) {
-        user = await linkGoogleAccount({
-          userId: existingByEmail.id,
-          googleId: profile.googleId,
-          avatar: profile.avatar,
-        })
-      } else if (mode === 'signup') {
-        // 3. Explicit sign-up with an unknown Google identity: create the account.
-        user = await createGoogleUser({
-          name: profile.name,
-          email: profile.email,
-          googleId: profile.googleId,
-          avatar: profile.avatar,
-        })
-      } else {
-        // 4. Sign-in with an unknown Google identity: never auto-create.
-        return response.status(404).json({
-          success: false,
-          error: {
-            code: 'ACCOUNT_NOT_FOUND',
-            message: 'No account found for this Google account. Please create an account first, then sign in.',
-          },
-        })
+    if (mode !== 'signup' && mode !== 'signin') {
+      return response.status(400).json({ success: false, error: { message: 'Invalid mode' } })
+    }
+    const existingGoogle = await findUserByGoogleId(profile.googleId)
+    const existingEmail = await findUserByEmail(profile.email)
+    let user
+    if (mode === 'signup') {
+      if (existingGoogle || existingEmail) {
+        return response.status(409).json({ success: false, error: { code: 'ACCOUNT_ALREADY_EXISTS', message: 'Account already exists. Please proceed to Login.' } })
       }
+      user = await createGoogleUser({ name: profile.name, email: profile.email, googleId: profile.googleId, avatar: profile.avatar })
+    } else {
+      if (!existingGoogle) {
+        return response.status(404).json({ success: false, error: { code: 'ACCOUNT_NOT_FOUND', message: 'No Google account found. Please use your existing sign-in method or sign up first.' } })
+      }
+      user = existingGoogle
     }
 
     const { password_hash: _passwordHash, google_id: _googleId, ...safeUser } = user
@@ -144,4 +132,61 @@ export async function updateProfile(request, response, next) {
   } catch (error) {
     return next(error)
   }
+}
+const RESET_MESSAGE = 'If this email has a password-based LemonTrip account, a reset link will be sent shortly.'
+const RESET_TTL_MINUTES = 20
+
+export async function forgotPassword(request, response, next) {
+  try {
+    const email = typeof request.body?.email === 'string' ? request.body.email.trim().toLowerCase() : ''
+    if (!/^\S+@\S+\.\S+$/.test(email)) {
+      return response.status(400).json({ success: false, error: { message: 'Enter a valid email address.' } })
+    }
+    const user = await findUserByEmail(email)
+    if (user?.password_hash) {
+      const token = crypto.randomBytes(32).toString('hex')
+      const tokenHash = crypto.createHash('sha256').update(token).digest('hex')
+      await pool.query('DELETE FROM password_reset_tokens WHERE user_id = $1', [user.id])
+      await pool.query(`INSERT INTO password_reset_tokens (user_id, token_hash, expires_at)
+        VALUES ($1, $2, NOW() + INTERVAL '20 minutes')`, [user.id, tokenHash])
+      const base = env.frontendUrls[0]?.replace(/\/$/, '') || 'http://localhost:3000'
+      const link = `${base}/reset-password?token=${encodeURIComponent(token)}`
+      try {
+        await sendEmail({
+          to: email,
+          subject: 'Reset your LemonTrip password',
+          html: `<p>We received a request to reset your LemonTrip password.</p><p><a href="${link}">Reset your password</a></p><p>This link expires in 20 minutes. If you did not request it, ignore this email.</p>`,
+        })
+      } catch (sendError) {
+        await pool.query('DELETE FROM password_reset_tokens WHERE token_hash = $1', [tokenHash])
+        throw sendError
+      }
+    }
+    return response.json({ success: true, data: { message: RESET_MESSAGE } })
+  } catch (error) { return next(error) }
+}
+
+export async function resetPassword(request, response, next) {
+  try {
+    const { token, password } = request.body || {}
+    if (typeof token !== 'string' || !/^[a-f0-9]{64}$/.test(token) || typeof password !== 'string' || password.length < 8 || password.length > 128) {
+      return response.status(400).json({ success: false, error: { message: 'Valid reset token and password of 8–128 characters required.' } })
+    }
+    const hash = crypto.createHash('sha256').update(token).digest('hex')
+    const client = await pool.connect()
+    try {
+      await client.query('BEGIN')
+      const result = await client.query(`SELECT user_id FROM password_reset_tokens WHERE token_hash = $1 AND expires_at > NOW() AND used_at IS NULL FOR UPDATE`, [hash])
+      if (!result.rows.length) {
+        await client.query('ROLLBACK')
+        return response.status(400).json({ success: false, error: { message: 'This reset link is invalid or expired. Please request a new one.' } })
+      }
+      const passwordHash = await bcrypt.hash(password, 12)
+      await client.query('UPDATE users SET password_hash = $1 WHERE id = $2 AND password_hash IS NOT NULL', [passwordHash, result.rows[0].user_id])
+      await client.query('DELETE FROM password_reset_tokens WHERE user_id = $1', [result.rows[0].user_id])
+      await client.query('COMMIT')
+      return response.json({ success: true, data: { message: 'Password updated. Please sign in.' } })
+    } catch (error) { await client.query('ROLLBACK'); throw error }
+    finally { client.release() }
+  } catch (error) { return next(error) }
 }
