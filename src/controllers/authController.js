@@ -168,8 +168,7 @@ export async function forgotPassword(request, response, next) {
 
 export async function resetPassword(request, response, next) {
   try {
-    const { token, password: legacyPassword, newPassword } = request.body || {}
-    const password = newPassword ?? legacyPassword
+    const { token, password } = request.body || {}
     if (typeof token !== 'string' || !/^[a-f0-9]{64}$/.test(token) || typeof password !== 'string' || password.length < 8 || password.length > 128) {
       return response.status(400).json({ success: false, error: { message: 'Valid reset token and password of 8–128 characters required.' } })
     }
