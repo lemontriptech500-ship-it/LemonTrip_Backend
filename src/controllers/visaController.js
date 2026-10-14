@@ -68,14 +68,24 @@ export async function createApplication(request, response, next) {
       return response.status(404).json({ success: false, error: { message: 'Visa service not found' } })
     }
 
+    const rawDob = personalDetails.dateOfBirth
+    let dateOfBirth = null
+    if (rawDob) {
+      const parsed = /^\d{4}-\d{2}-\d{2}$/.test(String(rawDob)) ? new Date(rawDob + 'T00:00:00Z') : null
+      if (!parsed || Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== rawDob || parsed.getTime() > Date.now()) {
+        return response.status(400).json({ success: false, error: { message: 'Date of birth must be a valid date in YYYY-MM-DD format' } })
+      }
+      dateOfBirth = rawDob
+    }
+
     const files = request.files || {}
     const applicationId = `LT-VISA-${Date.now().toString(36).toUpperCase()}`
 
     await pool.query(
       `INSERT INTO visa_applications (
         id, service_id, user_id, full_name, email, passport_number,
-        intended_entry_date, passport_front_path, passport_back_path, photograph_path, status
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'submitted')`,
+        intended_entry_date, passport_front_path, passport_back_path, photograph_path, status, date_of_birth
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'submitted',$11)`,
       [
         applicationId, serviceId, request.user?.id ?? null,
         personalDetails.fullName, personalDetails.email, passportDetails.passportNumber,
@@ -85,6 +95,7 @@ export async function createApplication(request, response, next) {
         files.passportFront?.[0]?.location ?? null,
         files.passportBack?.[0]?.location ?? null,
         files.photograph?.[0]?.location ?? null,
+        dateOfBirth,
       ],
     )
 
