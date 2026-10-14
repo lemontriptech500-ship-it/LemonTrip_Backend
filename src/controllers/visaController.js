@@ -52,6 +52,21 @@ function parseJsonField(value) {
   return typeof value === 'string' ? JSON.parse(value) : value
 }
 
+export async function replayDuplicateApplication(request, response, next) {
+  try {
+    const key = String(request.get('Idempotency-Key') || '').trim().slice(0, 120)
+    if (!key || !request.user?.id) return next()
+    const existing = await pool.query(
+      'SELECT id, status FROM visa_applications WHERE user_id = $1 AND idempotency_key = $2 LIMIT 1',
+      [request.user.id, key],
+    )
+    if (!existing.rows[0]) return next()
+    return response.status(200).json({ success: true, data: { applicationId: existing.rows[0].id, status: existing.rows[0].status } })
+  } catch (error) {
+    return next(error)
+  }
+}
+
 export async function createApplication(request, response, next) {
   try {
     const serviceId = request.body.serviceId
@@ -78,14 +93,16 @@ export async function createApplication(request, response, next) {
       dateOfBirth = rawDob
     }
 
+    const idempotencyKey = String(request.get('Idempotency-Key') || '').trim().slice(0, 120) || null
     const files = request.files || {}
     const applicationId = `LT-VISA-${Date.now().toString(36).toUpperCase()}`
 
-    await pool.query(
+    const inserted = await pool.query(
       `INSERT INTO visa_applications (
         id, service_id, user_id, full_name, email, passport_number,
-        intended_entry_date, passport_front_path, passport_back_path, photograph_path, status, date_of_birth
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'submitted',$11)`,
+        intended_entry_date, passport_front_path, passport_back_path, photograph_path, status, date_of_birth, idempotency_key
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'submitted',$11,$12)
+      ON CONFLICT DO NOTHING`,
       [
         applicationId, serviceId, request.user?.id ?? null,
         personalDetails.fullName, personalDetails.email, passportDetails.passportNumber,
@@ -96,8 +113,19 @@ export async function createApplication(request, response, next) {
         files.passportBack?.[0]?.location ?? null,
         files.photograph?.[0]?.location ?? null,
         dateOfBirth,
+        idempotencyKey,
       ],
     )
+
+    if (!inserted.rowCount && idempotencyKey) {
+      const existing = await pool.query(
+        'SELECT id, status FROM visa_applications WHERE user_id = $1 AND idempotency_key = $2 LIMIT 1',
+        [request.user?.id ?? null, idempotencyKey],
+      )
+      if (existing.rows[0]) {
+        return response.status(200).json({ success: true, data: { applicationId: existing.rows[0].id, status: existing.rows[0].status } })
+      }
+    }
 
     return response.status(201).json({ success: true, data: { applicationId, status: 'submitted' } })
   } catch (error) {

@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import {
   createApplication,
+  replayDuplicateApplication,
   getApplicationDocument,
   listApplications,
   getService,
@@ -14,7 +15,7 @@ const router = Router()
 
 router.get('/services', listServices)
 router.get('/services/:serviceId', getService)
-router.post('/applications', requireAuth, uploadVisaDocuments, createApplication)
+router.post('/applications', requireAuth, replayDuplicateApplication, uploadVisaDocuments, createApplication)
 router.get('/applications', requireAuth, listApplications)
 router.get('/applications/:applicationId', requireAuth, trackApplication)
 router.get('/applications/:applicationId/documents/:documentType', requireAuth, getApplicationDocument)
