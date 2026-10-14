@@ -61,8 +61,28 @@ const storage = multerS3({
 
 
 
+const allowedTypes = {
+  passportFront: ['application/pdf', 'image/jpeg', 'image/png'],
+  passportBack: ['application/pdf', 'image/jpeg', 'image/png'],
+  photograph: ['image/jpeg', 'image/png'],
+}
+
+const allowedExtensions = ['.pdf', '.jpg', '.jpeg', '.png']
+
+function visaFileFilter(req, file, cb) {
+  const types = allowedTypes[file.fieldname] || []
+  const ext = extname(file.originalname).toLowerCase()
+  if (!types.includes(file.mimetype) || !allowedExtensions.includes(ext)) {
+    const error = new Error('Unsupported file type. Use PDF, JPG or PNG (photograph: JPG or PNG).')
+    error.status = 400
+    return cb(error)
+  }
+  return cb(null, true)
+}
+
 export const uploadVisaDocuments = multer({
   storage,
+  fileFilter: visaFileFilter,
   limits: { fileSize: 5 * 1024 * 1024 },
 }).fields([
   { name: 'passportFront', maxCount: 1 },
