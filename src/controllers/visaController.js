@@ -107,7 +107,7 @@ export async function createApplication(request, response, next) {
         applicationId, serviceId, request.user?.id ?? null,
         personalDetails.fullName, personalDetails.email, passportDetails.passportNumber,
         travelDetails.intendedEntryDate || null,
-        // multerS3 populates file.location with the full S3 object URL —
+        // uploadVisaDocuments sets file.location to the full S3 object URL —
         // this is what gets stored in Postgres now instead of a local disk path.
         files.passportFront?.[0]?.location ?? null,
         files.passportBack?.[0]?.location ?? null,
