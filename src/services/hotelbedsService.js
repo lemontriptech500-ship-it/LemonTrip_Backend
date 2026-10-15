@@ -5,7 +5,12 @@ import { env } from '../config/env.js'
 
 let requestOverride = null
 const destinationCache = new Map()
+const destinationLookups = new Map()
 const hotelCache = new Map()
+const knownDestinationCodes = new Map([
+  ['delhi', 'DEL'],
+  ['new delhi', 'DEL'],
+])
 
 function configurationError(message) {
   const error = new Error(message)
@@ -39,7 +44,17 @@ function requestJson({ baseUrl, path, method = 'GET', body, requireMtls = false 
       response.on('end', () => {
         let parsed
         try { parsed = raw ? JSON.parse(raw) : null } catch { const error = new Error(`Hotelbeds returned a non-JSON response with status ${response.statusCode}.`); error.status = 502; reject(error); return }
-        if (response.statusCode < 200 || response.statusCode >= 300) { const error = new Error(parsed?.error?.message || parsed?.message || `Hotelbeds request failed with status ${response.statusCode}.`); error.status = response.statusCode >= 500 ? 502 : response.statusCode; reject(error); return }
+        if (response.statusCode < 200 || response.statusCode >= 300) {
+          const providerError = parsed?.error
+          const providerMessage = typeof providerError === 'string'
+            ? providerError
+            : providerError?.message || parsed?.message || parsed?.description || parsed?.errors?.[0]?.message
+          const error = new Error(providerMessage || `Hotelbeds request failed with status ${response.statusCode}.`)
+          error.status = response.statusCode >= 500 ? 502 : response.statusCode
+          error.providerCode = providerError?.code || parsed?.code || parsed?.errorCode
+          reject(error)
+          return
+        }
         resolve(parsed)
       })
     })
@@ -58,7 +73,7 @@ function normalizeCancellation(rate) {
 export function normalizeHotel(hotel, nights = 1) {
   const rooms = (hotel.rooms || []).map((room) => ({ id: room.code || room.roomCode || room.name, name: room.name || room.roomType || 'Room', type: 'standard', description: room.description || '', maxOccupancy: { maxAdults: 0, maxChildren: 0, maxTotal: 0 }, bedType: room.roomType || '', amenities: [], images: [], availableQuantity: Number(room.rates?.[0]?.rooms || room.rates?.[0]?.allotment || 0), rates: (room.rates || []).map((rate) => ({ id: rate.rateKey, rateKey: rate.rateKey, name: rate.boardName || rate.boardCode || 'Rate', pricePerNight: Number(rate.net || 0) / Math.max(nights, 1), totalPrice: Number(rate.net || 0), currency: rate.currency || 'EUR', mealPlan: 'room_only', refundable: Boolean(rate.cancellationPolicies?.length), rateType: rate.rateType, cancellationPolicy: normalizeCancellation(rate), benefits: [], hotelbeds: { rateKey: rate.rateKey, paymentType: rate.paymentType || 'AT_HOTEL' } })) }))
   const prices = rooms.flatMap((room) => room.rates.map((rate) => rate.pricePerNight)).filter(Boolean)
-  return { id: String(hotel.code), name: hotel.name || `Hotel ${hotel.code}`, location: { city: hotel.destinationName || hotel.destinationCode || '', area: hotel.zoneName || '', address: hotel.address || '' }, starRating: Number.parseInt(hotel.categoryCode || hotel.categoryName || '0', 10) || 0, guestRating: 0, guestReviewCount: 0, description: hotel.description || '', propertyType: 'hotel', images: (hotel.images || []).map((image) => ({ url: image.path || image.url, alt: hotel.name || 'Hotel' })), amenities: [], checkInTime: '', checkOutTime: '', rooms, currency: hotel.currency || rooms[0]?.rates[0]?.currency || 'EUR', startingPrice: Math.min(...prices, 0), supplier: 'HOTELBEDS' }
+  return { id: String(hotel.code), name: hotel.name || `Hotel ${hotel.code}`, location: { city: hotel.destinationName || hotel.destinationCode || '', area: hotel.zoneName || '', address: hotel.address || '' }, starRating: Number.parseInt(hotel.categoryCode || hotel.categoryName || '0', 10) || 0, guestRating: 0, guestReviewCount: 0, description: hotel.description || '', propertyType: 'hotel', images: (hotel.images || []).map((image) => ({ url: image.path || image.url, alt: hotel.name || 'Hotel' })), amenities: [], checkInTime: '', checkOutTime: '', rooms, currency: hotel.currency || rooms[0]?.rates[0]?.currency || 'EUR', startingPrice: prices.length ? Math.min(...prices) : Number(hotel.minRate || 0), supplier: 'HOTELBEDS' }
 }
 
 export function setHotelbedsRequestOverride(override) { requestOverride = override }
@@ -68,12 +83,46 @@ async function resolveDestination(destination) {
   const value = String(destination || '').trim()
   if (/^[A-Z0-9]{2,5}$/.test(value)) return value.toUpperCase()
   const key = value.toLowerCase()
+  if (knownDestinationCodes.has(key)) return knownDestinationCodes.get(key)
   if (destinationCache.has(key)) return destinationCache.get(key)
-  const response = await requestJson({ baseUrl: env.hotelbeds.contentBaseUrl, path: '/locations/destinations?fields=all&language=ENG&from=1&to=10000&useSecondaryLanguage=false' })
-  const match = (response.destinations || []).find((item) => item.name?.content?.toLowerCase?.().includes(key) || item.name?.toLowerCase?.().includes(key))
-  if (!match?.code) { const error = new Error('Hotelbeds has no destination matching that search.'); error.status = 400; throw error }
-  destinationCache.set(key, match.code)
-  return match.code
+  if (destinationLookups.has(key)) return destinationLookups.get(key)
+
+  const lookup = (async () => {
+    // Hotelbeds serves content in pages of up to 1,000 records. Cache every
+    // name in each successful page so subsequent searches don't repeat the
+    // static-content request for other cities on the same backend instance.
+    for (let from = 1; ; from += 1000) {
+      const to = from + 999
+      const response = await requestJson({ baseUrl: env.hotelbeds.contentBaseUrl, path: `/locations/destinations?fields=all&language=ENG&from=${from}&to=${to}&useSecondaryLanguage=false` })
+      const destinations = response.destinations || []
+      const names = destinations.map((item) => ({
+        code: item.code,
+        name: item.name?.content || item.name,
+      })).filter((item) => item.code && typeof item.name === 'string')
+
+      for (const item of names) destinationCache.set(item.name.trim().toLowerCase(), item.code)
+
+      const match = names.find((item) => item.name.trim().toLowerCase() === key)
+        || names.find((item) => item.name.trim().toLowerCase().startsWith(key))
+        || names.find((item) => item.name.trim().toLowerCase().includes(key))
+      if (match) {
+        destinationCache.set(key, match.code)
+        return match.code
+      }
+      if (destinations.length < 1000) break
+    }
+
+    const error = new Error('Hotelbeds has no destination matching that search.')
+    error.status = 400
+    throw error
+  })()
+
+  destinationLookups.set(key, lookup)
+  try {
+    return await lookup
+  } finally {
+    destinationLookups.delete(key)
+  }
 }
 
 export async function searchHotels({ destination, hotelCode, checkIn, checkOut, rooms = 1, adults = 2, children = 0, childAges = [], nationality = 'IN', currency = 'INR' }) {
