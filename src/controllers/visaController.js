@@ -138,7 +138,11 @@ export async function trackApplication(request, response, next) {
     const result = await pool.query(
       `SELECT a.id, s.country, s.visa_type AS "visaType",
               a.full_name AS "applicantName", a.status,
-              TO_CHAR(a.submitted_at, 'YYYY-MM-DD') AS "submittedDate"
+              TO_CHAR(a.submitted_at, 'YYYY-MM-DD') AS "submittedDate",
+              TO_CHAR(a.date_of_birth, 'YYYY-MM-DD') AS "dateOfBirth",
+              a.passport_number AS "passportNumber",
+              TO_CHAR(a.intended_entry_date, 'YYYY-MM-DD') AS "intendedEntryDate",
+              json_build_object('passportFront', a.passport_front_path IS NOT NULL, 'passportBack', a.passport_back_path IS NOT NULL, 'applicantPhoto', a.photograph_path IS NOT NULL) AS "uploadedDocuments"
        FROM visa_applications a
        JOIN visa_services s ON s.id = a.service_id
        WHERE a.id = $1 AND a.user_id = $2`,
