@@ -52,6 +52,21 @@ function parseJsonField(value) {
   return typeof value === 'string' ? JSON.parse(value) : value
 }
 
+export async function replayDuplicateApplication(request, response, next) {
+  try {
+    const key = String(request.get('Idempotency-Key') || '').trim().slice(0, 120)
+    if (!key || !request.user?.id) return next()
+    const existing = await pool.query(
+      'SELECT id, status FROM visa_applications WHERE user_id = $1 AND idempotency_key = $2 LIMIT 1',
+      [request.user.id, key],
+    )
+    if (!existing.rows[0]) return next()
+    return response.status(200).json({ success: true, data: { applicationId: existing.rows[0].id, status: existing.rows[0].status } })
+  } catch (error) {
+    return next(error)
+  }
+}
+
 export async function createApplication(request, response, next) {
   try {
     const serviceId = request.body.serviceId
@@ -68,25 +83,49 @@ export async function createApplication(request, response, next) {
       return response.status(404).json({ success: false, error: { message: 'Visa service not found' } })
     }
 
+    const rawDob = personalDetails.dateOfBirth
+    let dateOfBirth = null
+    if (rawDob) {
+      const parsed = /^\d{4}-\d{2}-\d{2}$/.test(String(rawDob)) ? new Date(rawDob + 'T00:00:00Z') : null
+      if (!parsed || Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== rawDob || parsed.getTime() > Date.now()) {
+        return response.status(400).json({ success: false, error: { message: 'Date of birth must be a valid date in YYYY-MM-DD format' } })
+      }
+      dateOfBirth = rawDob
+    }
+
+    const idempotencyKey = String(request.get('Idempotency-Key') || '').trim().slice(0, 120) || null
     const files = request.files || {}
     const applicationId = `LT-VISA-${Date.now().toString(36).toUpperCase()}`
 
-    await pool.query(
+    const inserted = await pool.query(
       `INSERT INTO visa_applications (
         id, service_id, user_id, full_name, email, passport_number,
-        intended_entry_date, passport_front_path, passport_back_path, photograph_path, status
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'submitted')`,
+        intended_entry_date, passport_front_path, passport_back_path, photograph_path, status, date_of_birth, idempotency_key
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'submitted',$11,$12)
+      ON CONFLICT DO NOTHING`,
       [
         applicationId, serviceId, request.user?.id ?? null,
         personalDetails.fullName, personalDetails.email, passportDetails.passportNumber,
         travelDetails.intendedEntryDate || null,
-        // multerS3 populates file.location with the full S3 object URL —
+        // uploadVisaDocuments sets file.location to the full S3 object URL —
         // this is what gets stored in Postgres now instead of a local disk path.
         files.passportFront?.[0]?.location ?? null,
         files.passportBack?.[0]?.location ?? null,
         files.photograph?.[0]?.location ?? null,
+        dateOfBirth,
+        idempotencyKey,
       ],
     )
+
+    if (!inserted.rowCount && idempotencyKey) {
+      const existing = await pool.query(
+        'SELECT id, status FROM visa_applications WHERE user_id = $1 AND idempotency_key = $2 LIMIT 1',
+        [request.user?.id ?? null, idempotencyKey],
+      )
+      if (existing.rows[0]) {
+        return response.status(200).json({ success: true, data: { applicationId: existing.rows[0].id, status: existing.rows[0].status } })
+      }
+    }
 
     return response.status(201).json({ success: true, data: { applicationId, status: 'submitted' } })
   } catch (error) {
@@ -99,7 +138,11 @@ export async function trackApplication(request, response, next) {
     const result = await pool.query(
       `SELECT a.id, s.country, s.visa_type AS "visaType",
               a.full_name AS "applicantName", a.status,
-              TO_CHAR(a.submitted_at, 'YYYY-MM-DD') AS "submittedDate"
+              TO_CHAR(a.submitted_at, 'YYYY-MM-DD') AS "submittedDate",
+              TO_CHAR(a.date_of_birth, 'YYYY-MM-DD') AS "dateOfBirth",
+              a.passport_number AS "passportNumber",
+              TO_CHAR(a.intended_entry_date, 'YYYY-MM-DD') AS "intendedEntryDate",
+              json_build_object('passportFront', a.passport_front_path IS NOT NULL, 'passportBack', a.passport_back_path IS NOT NULL, 'applicantPhoto', a.photograph_path IS NOT NULL) AS "uploadedDocuments"
        FROM visa_applications a
        JOIN visa_services s ON s.id = a.service_id
        WHERE a.id = $1 AND a.user_id = $2`,
