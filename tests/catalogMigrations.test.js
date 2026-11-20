@@ -43,7 +43,7 @@ function fakeDatabase({ existingTables = [] } = {}) {
 test('fresh database applies each catalog migration and records it', async () => {
   const database = fakeDatabase()
   await migrateDatabase(database)
-  assert.equal(database.applied.size, 5)
+  assert.equal(database.applied.size, 6)
   assert.match(database.migrationsRun.join('\n'), /CREATE TABLE IF NOT EXISTS blog_posts/)
   assert.match(database.migrationsRun.join('\n'), /CREATE TABLE IF NOT EXISTS travel_packages/)
   assert.match(database.migrationsRun.join('\n'), /CREATE TABLE IF NOT EXISTS visa_services/)
@@ -54,7 +54,7 @@ test('repeated migration run skips already applied files', async () => {
   await migrateDatabase(database)
   const initialCount = database.migrationsRun.length
   await migrateDatabase(database)
-  assert.equal(database.applied.size, 5)
+  assert.equal(database.applied.size, 6)
   assert.equal(database.migrationsRun.length, initialCount)
 })
 

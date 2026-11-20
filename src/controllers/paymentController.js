@@ -123,8 +123,21 @@ export async function verifyFlightPayment(request, response, next) {
 const travelCatalogQueries = {
   hotel: 'SELECT id, currency, catalog FROM hotels WHERE id = $1 AND active = TRUE LIMIT 1',
   bus: 'SELECT price, currency, seats_left AS "seatsLeft" FROM bus_services WHERE id = $1 AND active = TRUE LIMIT 1',
+  cab: `SELECT price_per_km AS "pricePerKm", base_fare AS "baseFare", included_km AS "includedKm", passenger_capacity AS "passengerCapacity", 'INR'::char(3) AS currency FROM cab_services WHERE id = $1 AND active = TRUE LIMIT 1`,
   train: 'SELECT price_amount AS price, currency FROM train_services WHERE id = $1 AND active = TRUE LIMIT 1',
   package: 'SELECT price_amount AS price, currency FROM travel_packages WHERE id = $1 LIMIT 1',
+}
+
+function isValidJourneyDate(value) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false
+  const date = new Date(`${value}T00:00:00.000Z`)
+  return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value
+}
+
+function todayInIndia() {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(new Date())
 }
 
 export async function createTravelOrder(request, response, next) {
@@ -149,6 +162,32 @@ export async function createTravelOrder(request, response, next) {
       }
     }
 
+    if (itemType === 'cab') {
+      const distanceKm = Number(details.distanceKm)
+      const passengerCount = Number(details.passengerCount)
+      const tripDate = String(details.travelDate || '')
+      const pickupTime = String(details.pickupTime || '')
+      const tripType = String(details.tripType || '')
+      const pickupAddress = String(details.pickupAddress || '').trim()
+      const dropoffAddress = String(details.dropoffAddress || '').trim()
+      const returnDate = String(details.returnDate || '')
+      const today = todayInIndia()
+      const email = String(details.email || '').trim()
+      if (!Number.isFinite(distanceKm) || distanceKm <= 0 || distanceKm > 3000
+        || !Number.isInteger(passengerCount) || passengerCount < 1
+        || !isValidJourneyDate(tripDate) || tripDate < today
+        || !/^([01]\d|2[0-3]):[0-5]\d$/.test(pickupTime)
+        || !['one_way', 'round_trip'].includes(tripType)
+        || pickupAddress.length < 5 || pickupAddress.length > 300
+        || dropoffAddress.length < 5 || dropoffAddress.length > 300
+        || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+        || String(details.passengerName || '').trim().length < 2
+        || String(details.passengerName || '').trim().length > 120
+        || (tripType === 'round_trip' && (!isValidJourneyDate(returnDate) || returnDate < tripDate))) {
+        return response.status(400).json({ success: false, error: { message: 'Enter valid pickup, drop-off, date, time, distance, and passenger details' } })
+      }
+    }
+
     const providerHotel = itemType === 'hotel' && itemId.startsWith('hb-') ? getHotelBedsHotel(itemId) : null
     const providerTrain = itemType === 'train' && itemId.startsWith('irctc-') ? await getIrctcTrain(itemId) : null
     const provider = itemType === 'train' ? 'irctc' : providerHotel ? 'hotelbeds' : null
@@ -160,7 +199,14 @@ export async function createTravelOrder(request, response, next) {
     }
 
     let amountPaise
-    if (itemType === 'hotel') {
+    if (itemType === 'cab') {
+      const distanceKm = Number(details.distanceKm) * (details.tripType === 'round_trip' ? 2 : 1)
+      const billableKm = Math.max(0, distanceKm - Number(item.includedKm || 0))
+      if (Number(details.passengerCount) > Number(item.passengerCapacity)) {
+        return response.status(400).json({ success: false, error: { message: 'The selected cab does not have enough passenger seats' } })
+      }
+      amountPaise = Math.round((Number(item.baseFare) + billableKm * Number(item.pricePerKm)) * 100)
+    } else if (itemType === 'hotel') {
       if (!Array.isArray(details.selections) || details.selections.length === 0 || !Number.isInteger(normalizedQuantity)) {
         return response.status(400).json({ success: false, error: { message: 'Hotel room selections and nights are required' } })
       }

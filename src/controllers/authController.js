@@ -90,10 +90,20 @@ export async function googleAuth(request, response, next) {
       }
       user = await createGoogleUser({ name: profile.name, email: profile.email, googleId: profile.googleId, avatar: profile.avatar })
     } else {
-      if (!existingGoogle) {
-        return response.status(404).json({ success: false, error: { code: 'ACCOUNT_NOT_FOUND', message: 'No Google account found. Please use your existing sign-in method or sign up first.' } })
+      if (existingGoogle) {
+        user = existingGoogle
+      } else if (existingEmail && !existingEmail.google_id) {
+        // Google has already verified this email. Link it to the matching local
+        // account so users can use Google without creating a duplicate account.
+        user = await linkGoogleAccount({ userId: existingEmail.id, googleId: profile.googleId, avatar: profile.avatar })
+        if (!user) {
+          return response.status(409).json({ success: false, error: { code: 'ACCOUNT_ALREADY_LINKED', message: 'This account is already linked to another Google account.' } })
+        }
+      } else if (existingEmail) {
+        return response.status(409).json({ success: false, error: { code: 'ACCOUNT_ALREADY_LINKED', message: 'This account is already linked to another Google account.' } })
+      } else {
+        return response.status(404).json({ success: false, error: { code: 'ACCOUNT_NOT_FOUND', message: 'No Google account found. Please create an account first.' } })
       }
-      user = existingGoogle
     }
 
     const { password_hash: _passwordHash, google_id: _googleId, ...safeUser } = user
@@ -101,6 +111,14 @@ export async function googleAuth(request, response, next) {
   } catch (error) {
     return next(error)
   }
+}
+
+export function googleAuthConfig(_request, response) {
+  if (!env.googleClientId) {
+    return response.status(503).json({ success: false, error: { message: 'Google Sign-In is not configured on the server.' } })
+  }
+  response.set('Cache-Control', 'public, max-age=3600')
+  return response.json({ success: true, data: { clientId: env.googleClientId } })
 }
 
 export async function me(request, response, next) {

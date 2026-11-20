@@ -9,7 +9,8 @@
     "db:migrate": "node src/db/migrate.js",
     "db:seed:development": "node src/db/seedDevelopment.js",
     "db:seed:flights": "node src/db/seedFlights.js",
-    "test": "node --test"
+    "test": "node --test",
+    "dev:mobile": "node scripts/startMobileVisa.js"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1132.0",

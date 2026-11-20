@@ -54,7 +54,7 @@ export async function linkGoogleAccount({ userId, googleId, avatar }) {
   const result = await pool.query(
     `UPDATE users
      SET google_id = $2, avatar = COALESCE(avatar, $3)
-     WHERE id = $1
+     WHERE id = $1 AND google_id IS NULL
      RETURNING id, name, email, phone, avatar, provider`,
     [userId, googleId, avatar],
   )

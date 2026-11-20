@@ -4,6 +4,7 @@ const SERVICE_ALIASES = {
   bus: 'bus',
   train: 'trains',
   package: 'packages',
+  cab: 'cabs',
 }
 
 export function normalizeCouponServiceType(serviceType) {

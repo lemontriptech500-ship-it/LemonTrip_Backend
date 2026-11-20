@@ -1,4 +1,13 @@
 -- Optional development sample inventory. Existing rows are never updated.
+-- Sample cab inventory and indicative rates for local development only.
+INSERT INTO cab_services (id, name, city, category, passenger_capacity, luggage_capacity, transmission, fuel_type, price_per_km, base_fare, included_km, image_url, features)
+VALUES
+  ('cab-delhi-sedan', 'Comfort Sedan', 'Delhi', 'Sedan', 4, 2, 'Manual', 'Petrol', 13, 350, 0, 'https://images.unsplash.com/photo-1552519507-da3b142c6e3d?w=1000&q=85', ARRAY['Air conditioning', 'Professional driver', 'Local and outstation']),
+  ('cab-delhi-suv', 'Family SUV', 'Delhi', 'SUV', 6, 4, 'Manual', 'Diesel', 18, 500, 0, 'https://images.unsplash.com/photo-1519641471654-76ce0107ad1b?w=1000&q=85', ARRAY['Air conditioning', 'Extra luggage space', 'Local and outstation']),
+  ('cab-mumbai-sedan', 'City Sedan', 'Mumbai', 'Sedan', 4, 2, 'Automatic', 'Petrol', 15, 400, 0, 'https://images.unsplash.com/photo-1503376780353-7e6692767b70?w=1000&q=85', ARRAY['Air conditioning', 'Professional driver', 'Airport pickup']),
+  ('cab-bengaluru-mpv', 'Group MPV', 'Bengaluru', 'MPV', 7, 5, 'Manual', 'Diesel', 20, 550, 0, 'https://images.unsplash.com/photo-1511919884226-fd3cad34687c?w=1000&q=85', ARRAY['Air conditioning', 'Extra luggage space', 'Group travel'])
+ON CONFLICT (id) DO NOTHING;
+
 INSERT INTO blog_posts (id, category, title, excerpt, content, image_fallback_color, image_url, published_at, read_time)
 VALUES
   ('blog-1', 'Travel Tips', '10 Essential Items to Pack for a Beach Vacation', 'Don''t let a forgotten item ruin your sunny getaway. Here is our ultimate packing list for the perfect beach trip.', 'A thoughtful packing list keeps a beach holiday relaxed from the first morning to the last sunset. Pack light layers, sun protection, swimwear, comfortable footwear, a reusable water bottle, and a small dry bag for your essentials.', 'bg-[var(--color-primary-soft)]', 'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?w=900&q=85', '2023-10-12', '5 min read'),

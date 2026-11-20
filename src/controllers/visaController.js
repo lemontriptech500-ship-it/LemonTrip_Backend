@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { pool } from '../config/db.js'
 import { GetObjectCommand } from '@aws-sdk/client-s3'
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
@@ -55,12 +56,38 @@ function parseJsonField(value) {
 export async function createApplication(request, response, next) {
   try {
     const serviceId = request.body.serviceId
-    const personalDetails = parseJsonField(request.body.personalDetails)
-    const passportDetails = parseJsonField(request.body.passportDetails)
-    const travelDetails = parseJsonField(request.body.travelDetails)
+    let personalDetails, passportDetails, travelDetails
+    try {
+      personalDetails = parseJsonField(request.body.personalDetails)
+      passportDetails = parseJsonField(request.body.passportDetails)
+      travelDetails = parseJsonField(request.body.travelDetails)
+    } catch {
+      return response.status(400).json({ success: false, error: { message: 'Application details must contain valid JSON' } })
+    }
 
     if (!serviceId || !personalDetails || !passportDetails || !travelDetails) {
       return response.status(400).json({ success: false, error: { message: 'Visa service and application details are required' } })
+    }
+
+    const validDate = (value) => {
+      if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false
+      const date = new Date(`${value}T00:00:00Z`)
+      return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value
+    }
+    if (typeof personalDetails.fullName !== 'string' || personalDetails.fullName.trim().length < 2 ||
+        typeof personalDetails.email !== 'string' || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(personalDetails.email.trim()) ||
+        typeof passportDetails.passportNumber !== 'string' || passportDetails.passportNumber.trim().length < 3 ||
+        !validDate(travelDetails.intendedEntryDate) ||
+        (personalDetails.dateOfBirth && (!validDate(personalDetails.dateOfBirth) || personalDetails.dateOfBirth > new Date().toISOString().slice(0, 10)))) {
+      return response.status(400).json({ success: false, error: { message: 'Enter valid applicant, passport, and travel details' } })
+    }
+    const files = request.files || {}
+    if (!files.passportFront?.[0]?.location || !files.passportBack?.[0]?.location || !files.photograph?.[0]?.location) {
+      return response.status(400).json({ success: false, error: { message: 'Passport front, passport back, and photograph are required' } })
+    }
+    const idempotencyKey = request.get?.('Idempotency-Key') || null
+    if (idempotencyKey && (idempotencyKey.length > 160 || !/^[a-zA-Z0-9_-]+$/.test(idempotencyKey))) {
+      return response.status(400).json({ success: false, error: { message: 'Invalid submission key' } })
     }
 
     const service = await pool.query('SELECT id FROM visa_services WHERE id = $1', [serviceId])
@@ -68,14 +95,15 @@ export async function createApplication(request, response, next) {
       return response.status(404).json({ success: false, error: { message: 'Visa service not found' } })
     }
 
-    const files = request.files || {}
-    const applicationId = `LT-VISA-${Date.now().toString(36).toUpperCase()}`
+    const applicationId = `LT-VISA-${randomUUID().toUpperCase()}`
 
-    await pool.query(
+    const created = await pool.query(
       `INSERT INTO visa_applications (
         id, service_id, user_id, full_name, email, passport_number,
-        intended_entry_date, passport_front_path, passport_back_path, photograph_path, status
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'submitted')`,
+        intended_entry_date, passport_front_path, passport_back_path, photograph_path, status, date_of_birth, idempotency_key
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'submitted',$11,$12)
+      ON CONFLICT (user_id, idempotency_key) DO UPDATE SET id = visa_applications.id
+      RETURNING id, status`,
       [
         applicationId, serviceId, request.user?.id ?? null,
         personalDetails.fullName, personalDetails.email, passportDetails.passportNumber,
@@ -85,10 +113,11 @@ export async function createApplication(request, response, next) {
         files.passportFront?.[0]?.location ?? null,
         files.passportBack?.[0]?.location ?? null,
         files.photograph?.[0]?.location ?? null,
+        personalDetails.dateOfBirth || null, idempotencyKey,
       ],
     )
 
-    return response.status(201).json({ success: true, data: { applicationId, status: 'submitted' } })
+    return response.status(201).json({ success: true, data: { applicationId: created.rows[0].id, status: created.rows[0].status } })
   } catch (error) {
     return next(error)
   }
@@ -98,7 +127,12 @@ export async function trackApplication(request, response, next) {
   try {
     const result = await pool.query(
       `SELECT a.id, s.country, s.visa_type AS "visaType",
-              a.full_name AS "applicantName", a.status,
+              a.full_name AS "applicantName", a.status, a.passport_number AS "passportNumber",
+              TO_CHAR(a.date_of_birth, 'YYYY-MM-DD') AS "dateOfBirth",
+              TO_CHAR(a.intended_entry_date, 'YYYY-MM-DD') AS "intendedEntryDate",
+              (a.passport_front_path IS NOT NULL) AS "passportFront",
+              (a.passport_back_path IS NOT NULL) AS "passportBack",
+              (a.photograph_path IS NOT NULL) AS "applicantPhoto",
               TO_CHAR(a.submitted_at, 'YYYY-MM-DD') AS "submittedDate"
        FROM visa_applications a
        JOIN visa_services s ON s.id = a.service_id
@@ -109,7 +143,7 @@ export async function trackApplication(request, response, next) {
 
     return response.json({
       success: true,
-      data: { ...result.rows[0], documents: ['Passport', 'Photograph'] },
+      data: { ...result.rows[0], documents: ['Passport', 'Photograph'], uploadedDocuments: { passportFront: result.rows[0].passportFront, passportBack: result.rows[0].passportBack, applicantPhoto: result.rows[0].applicantPhoto } },
     })
   } catch (error) {
     return next(error)

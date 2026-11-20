@@ -28,6 +28,7 @@ export async function getRecentBookings(request, response, next) {
           WHEN b.item_type = 'hotel' THEN COALESCE(h.name, 'Hotel booking')
           WHEN b.item_type = 'train' THEN COALESCE(ts.name, 'Train booking')
           WHEN b.item_type = 'package' THEN COALESCE(tp.destination, 'Package booking')
+          WHEN b.item_type = 'cab' THEN COALESCE(b.details->>'cabName', 'Cab booking')
           ELSE INITCAP(b.item_type) || ' booking'
         END AS title,
         b.details || jsonb_build_object('itemId', b.item_id, 'couponCode', b.coupon_code, 'discount', ROUND(b.discount_paise / 100.0, 2)::float) AS details
